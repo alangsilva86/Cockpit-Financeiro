@@ -1,0 +1,7 @@
+{
+  "name": "Cockpit Financeiro 2026",
+  "description": "Financial control tower for debt management and budget visualization.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
