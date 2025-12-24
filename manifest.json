@@ -1,0 +1,22 @@
+{
+  "short_name": "Cockpit",
+  "name": "Cockpit Financeiro 2026",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/10384/10384161.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/10384/10384161.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090b",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#09090b",
+  "orientation": "portrait"
+}
