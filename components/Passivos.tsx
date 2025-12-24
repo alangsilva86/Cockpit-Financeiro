@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Card, InstallmentPlan, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
+import { EmptyState } from './ui/EmptyState';
+import { formatCurrency, formatKindLabel, formatShortDate } from '../utils/format';
 
 interface PassivosProps {
   cards: Card[];
@@ -130,71 +132,120 @@ export const Passivos: React.FC<PassivosProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <p className="text-white font-bold text-lg">{card.name}</p>
-              <p className="text-[10px] text-zinc-500">Competência {selectedMonth} · Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}</p>
+              <p className="text-[10px] text-zinc-500">
+                Competência {selectedMonth} · Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}
+              </p>
             </div>
             <button onClick={() => startEdit(card)} className="text-zinc-500 hover:text-white"><Icons.Edit size={16}/></button>
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Fatura</p>
-              <p className="text-white font-mono font-bold">R$ {totalCharges.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-500 uppercase">Compras</p>
+              <p className="text-white font-mono font-bold">R$ {formatCurrency(totalCharges)}</p>
             </div>
             <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Pago</p>
-              <p className="text-emerald-400 font-mono font-bold">R$ {totalPayments.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-500 uppercase">Pagamentos</p>
+              <p className="text-emerald-400 font-mono font-bold">R$ {formatCurrency(totalPayments)}</p>
             </div>
             <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Restante</p>
-              <p className={`${remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>R$ {remaining.toLocaleString()}</p>
+              <p className="text-[10px] text-zinc-500 uppercase">Saldo</p>
+              <p className={`${remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>R$ {formatCurrency(remaining)}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => onQuickAddDraft?.({
-                description: `Pagamento fatura ${card.name}`,
-                amount: remaining > 0 ? remaining : 0,
-                kind: 'debt_payment',
-                paymentMethod: 'pix',
-                cardId: card.id,
-                status: 'paid',
-                date: new Date().toISOString(),
-                competenceMonth: selectedMonth,
-              })}
+              onClick={() =>
+                onQuickAddDraft?.({
+                  description: `Pagamento fatura ${card.name}`,
+                  amount: remaining > 0 ? remaining : 0,
+                  kind: 'debt_payment',
+                  paymentMethod: 'pix',
+                  cardId: card.id,
+                  status: 'paid',
+                  date: new Date().toISOString(),
+                  competenceMonth: selectedMonth,
+                })
+              }
               className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-sm font-bold hover:bg-emerald-500"
             >
-              Registrar pagamento
+              Pagar total
             </button>
             <button
-              onClick={() => onQuickAddDraft?.({
-                description: `Pagamento parcial ${card.name}`,
-                amount: remaining > 0 ? remaining / 2 : 0,
-                kind: 'debt_payment',
-                paymentMethod: 'pix',
-                cardId: card.id,
-                status: 'paid',
-                date: new Date().toISOString(),
-                competenceMonth: selectedMonth,
-              })}
+              onClick={() =>
+                onQuickAddDraft?.({
+                  description: `Pagamento mínimo ${card.name}`,
+                  amount: remaining > 0 ? Math.min(remaining, Math.max(remaining * 0.15, 50)) : 0,
+                  kind: 'debt_payment',
+                  paymentMethod: 'pix',
+                  cardId: card.id,
+                  status: 'paid',
+                  date: new Date().toISOString(),
+                  competenceMonth: selectedMonth,
+                })
+              }
               className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-sm"
             >
-              Parcial
+              Pagar mínimo
+            </button>
+            <button
+              onClick={() =>
+                onQuickAddDraft?.({
+                  description: `Pagamento ${card.name}`,
+                  amount: 0,
+                  kind: 'debt_payment',
+                  paymentMethod: 'pix',
+                  cardId: card.id,
+                  status: 'paid',
+                  date: new Date().toISOString(),
+                  competenceMonth: selectedMonth,
+                })
+              }
+              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-sm"
+            >
+              Outro valor
             </button>
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold">Transações do mês</p>
-            {[...charges, ...payments].length === 0 && <p className="text-xs text-zinc-500">Sem lançamentos para este mês.</p>}
-            {[...charges, ...payments]
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-              .map((t) => (
-              <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
-                <div>
-                  <p className="text-white">{t.description}</p>
-                  <p className="text-[10px] text-zinc-500">{new Date(t.date).toLocaleDateString('pt-BR')} · {t.kind}</p>
-                </div>
-                <span className={`font-mono ${t.kind === 'debt_payment' ? 'text-emerald-400' : 'text-zinc-200'}`}>R$ {Number(t.amount || 0).toLocaleString()}</span>
-              </div>
-            ))}
+            <p className="text-[10px] text-zinc-500 uppercase font-bold">Compras (competência)</p>
+            {charges.length === 0 ? (
+              <EmptyState title="Sem compras no ciclo" description="Sem lançamentos de crédito nesta competência." />
+            ) : (
+              charges
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .map((t) => (
+                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-white">{t.description}</p>
+                      <p className="text-[10px] text-zinc-500">
+                        {formatShortDate(t.date)} · {formatKindLabel(t.kind)}
+                      </p>
+                    </div>
+                    <span className="font-mono text-zinc-200">R$ {formatCurrency(Number(t.amount || 0))}</span>
+                  </div>
+                ))
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[10px] text-zinc-500 uppercase font-bold">Pagamentos (caixa)</p>
+            {payments.length === 0 ? (
+              <EmptyState title="Sem pagamentos neste mês" description="Registre pagamentos para baixar o saldo." />
+            ) : (
+              payments
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .map((t) => (
+                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-white">{t.description}</p>
+                      <p className="text-[10px] text-zinc-500">
+                        {formatShortDate(t.date)} · {formatKindLabel(t.kind)}
+                      </p>
+                    </div>
+                    <span className="font-mono text-emerald-400">R$ {formatCurrency(Number(t.amount || 0))}</span>
+                  </div>
+                ))
+            )}
           </div>
 
           <div className="space-y-2">

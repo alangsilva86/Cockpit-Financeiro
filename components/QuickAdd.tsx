@@ -10,6 +10,7 @@ interface QuickAddProps {
   availableCategories: string[];
   availableCards: Card[];
   onAddCard: (card: Card) => void;
+  lastUsed?: Transaction | null;
   draft?: TransactionDraft | null;
   onClearDraft: () => void;
   isOnline: boolean;
@@ -101,6 +102,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
   availableCategories,
   availableCards,
   onAddCard,
+  lastUsed,
   draft,
   onClearDraft,
   isOnline,
@@ -119,6 +121,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const defaultsAppliedRef = useRef(false);
   const [isCreatingCard, setIsCreatingCard] = useState(false);
   const [newCardName, setNewCardName] = useState('');
   const [newCardDay, setNewCardDay] = useState('');
@@ -134,6 +137,28 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
       setSelectedCardId(availableCards[0].id);
     }
   }, [availableCards, selectedCardId]);
+
+  useEffect(() => {
+    if (paymentMethod === 'credit' && selectedCardId) {
+      const exists = availableCards.some((card) => card.id === selectedCardId);
+      if (!exists) {
+        setSelectedCardId(availableCards[0]?.id || '');
+      }
+    }
+  }, [availableCards, paymentMethod, selectedCardId]);
+
+  useEffect(() => {
+    if (defaultsAppliedRef.current || draft || !lastUsed) return;
+    defaultsAppliedRef.current = true;
+    if (lastUsed.personId) setPersonId(lastUsed.personId);
+    if (lastUsed.kind) setKind(lastUsed.kind);
+    if (lastUsed.paymentMethod) setPaymentMethod(lastUsed.paymentMethod);
+    if (lastUsed.cardId) setSelectedCardId(lastUsed.cardId);
+    if (lastUsed.categoryId && (lastUsed.kind === 'expense' || lastUsed.kind === 'fee_interest')) {
+      setCategory(lastUsed.categoryId);
+    }
+    setIsRollover(lastUsed.kind === 'fee_interest');
+  }, [draft, lastUsed]);
 
   const displayedCategories = useMemo(() => {
     if (kind === 'income') return INCOME_CATEGORIES;
@@ -177,15 +202,19 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
   }, [draft]);
 
   const progress = useMemo(() => {
-    const checkpoints = [
-      kind,
-      amount,
-      description && category,
-      personId,
-      paymentMethod,
+    const required = [
+      Boolean(kind),
+      Boolean(amount),
+      Boolean(description),
+      Boolean(date),
+      Boolean(paymentMethod),
+      paymentMethod !== 'credit' || Boolean(selectedCardId),
+      !(kind === 'expense' || kind === 'fee_interest') || Boolean(category),
+      !isInstallment || (installmentsCount > 1 && Boolean(firstInstallmentDate)),
     ];
-    return Math.round((checkpoints.filter(Boolean).length / 4) * 100);
-  }, [kind, amount, description, category, personId, paymentMethod]);
+    const done = required.filter(Boolean).length;
+    return Math.round((done / required.length) * 100);
+  }, [kind, amount, description, date, paymentMethod, selectedCardId, category, isInstallment, installmentsCount, firstInstallmentDate]);
 
   const isFutureDate = useMemo(() => new Date(date) > new Date(), [date]);
 
@@ -485,13 +514,14 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
       )}
 
       {/* === STEP 1: OPERATION TYPE (NAVIGATION) === */}
+      <div className="mb-2 text-[10px] text-zinc-500 uppercase font-bold tracking-wider">O que aconteceu?</div>
       <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
           <div className="flex gap-2">
             {([
-              { key: 'expense', label: 'Gasto' },
+              { key: 'expense', label: 'Compra' },
               { key: 'income', label: 'Receita' },
-              { key: 'debt_payment', label: 'Pagamento Dívida' },
-              { key: 'fee_interest', label: 'Juros/Taxa' },
+              { key: 'debt_payment', label: 'Pagamento do cartão' },
+              { key: 'fee_interest', label: 'Taxas/Juros' },
               { key: 'transfer', label: 'Transferência' },
             ] as const).map((t) => (
               <button

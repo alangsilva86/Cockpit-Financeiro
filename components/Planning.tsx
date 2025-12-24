@@ -27,6 +27,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
 
   const competenceFromDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const nextCompetence = competenceFromDate(nextMonthDate);
+  const nextMonthLabel = nextMonthDate.toLocaleDateString('pt-BR', { month: 'long' });
 
   const nextMonthForecast = useMemo(() => {
     const expenses = transactions.filter((t) => (t.competenceMonth || competenceFromDate(new Date(t.date))) === nextCompetence && t.kind === 'expense');
@@ -82,7 +83,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
           className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
         >
           <Icons.Calendar size={18} />
-          Gerar Roteiro de Fevereiro
+          Gerar Roteiro de {nextMonthLabel}
         </button>
         {lastGeneration && (
           <p className="text-[10px] text-blue-200 mt-2">{lastGeneration}</p>

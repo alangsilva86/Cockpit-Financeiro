@@ -7,6 +7,7 @@ import {
   TrendingUp, 
   TrendingDown, 
   AlertTriangle,
+  HelpCircle,
   Zap,
   CheckCircle2,
   AlertCircle,
@@ -53,5 +54,6 @@ export const Icons = {
   More: MoreHorizontal,
   Camera: Camera,
   Loader: Loader2,
-  Close: X
+  Close: X,
+  Help: HelpCircle,
 };

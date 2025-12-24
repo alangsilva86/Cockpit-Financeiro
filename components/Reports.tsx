@@ -3,9 +3,11 @@ import { AppState, InstallmentPlan, PaymentMethod, PersonId, Transaction } from 
 import { Icons } from './Icons';
 import { generateFinancialInsight } from '../services/aiClient';
 import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, CartesianGrid } from 'recharts';
-
-const formatCurrency = (value?: number) =>
-  new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value ?? 0);
+import { EmptyState } from './ui/EmptyState';
+import { FilterChips } from './ui/FilterChips';
+import { KpiCard } from './ui/KpiCard';
+import { TransactionRow } from './ui/TransactionRow';
+import { addMonths, formatCurrency, formatKindLabel } from '../utils/format';
 
 interface ReportsProps {
   state: AppState;
@@ -23,7 +25,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   const [personFilter, setPersonFilter] = useState<PersonId | 'All'>('All');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | 'All'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'paid' | 'pending'>('All');
-  const [insight, setInsight] = useState<string>('Conecte uma API Key para insights rápidos.');
+  const [insight, setInsight] = useState<string>('Insights automáticos desativados. Configure um provedor para ativar.');
   const [loadingInsight, setLoadingInsight] = useState(false);
   
   // State for expandable details
@@ -31,11 +33,8 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
   // Helper: Get target date based on tab and offset
   const targetDate = useMemo(() => {
-    const d = new Date();
-    if (activeTab === 'past') d.setMonth(d.getMonth() - 1 + selectedMonthOffset);
-    if (activeTab === 'present') d.setMonth(d.getMonth());
-    if (activeTab === 'future') d.setMonth(d.getMonth() + 1 + selectedMonthOffset);
-    return d;
+    const baseOffset = activeTab === 'past' ? -1 : activeTab === 'future' ? 1 : 0;
+    return addMonths(new Date(), baseOffset + selectedMonthOffset);
   }, [activeTab, selectedMonthOffset]);
 
   const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -54,20 +53,37 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
     });
   }, [state.transactions, targetDate, personFilter, paymentFilter, statusFilter]);
 
-  // Aggregations
-  const stats = useMemo(() => {
+  const computeStats = (data: Transaction[]) => {
     const getAmt = (t: Transaction) => Number(t.amount || 0);
-    const incomeExtra = filteredData.filter(t => t.kind === 'income').reduce((acc, t) => acc + getAmt(t), 0);
-    const lifeCost = filteredData.filter(t => t.kind === 'expense').reduce((acc, t) => acc + getAmt(t), 0);
-    const burn = filteredData.filter(t => t.kind === 'fee_interest').reduce((acc, t) => acc + getAmt(t), 0);
-    const debtPrincipal = filteredData.filter(t => t.kind === 'debt_payment').reduce((acc, t) => acc + getAmt(t), 0);
-    const transfer = filteredData.filter(t => t.kind === 'transfer').reduce((acc, t) => acc + getAmt(t), 0);
+    const incomeExtra = data.filter((t) => t.kind === 'income').reduce((acc, t) => acc + getAmt(t), 0);
+    const lifeCost = data.filter((t) => t.kind === 'expense').reduce((acc, t) => acc + getAmt(t), 0);
+    const burn = data.filter((t) => t.kind === 'fee_interest').reduce((acc, t) => acc + getAmt(t), 0);
+    const debtPrincipal = data.filter((t) => t.kind === 'debt_payment').reduce((acc, t) => acc + getAmt(t), 0);
+    const transfer = data.filter((t) => t.kind === 'transfer').reduce((acc, t) => acc + getAmt(t), 0);
     const income = state.monthlyIncome + incomeExtra;
     const totalPaid = lifeCost + burn + debtPrincipal + transfer;
     const realCost = lifeCost + burn;
 
     return { income, lifeCost, burn, debtPrincipal, transfer, totalPaid, realCost, rollover: transfer };
-  }, [filteredData, state.monthlyIncome]);
+  };
+
+  const stats = useMemo(() => computeStats(filteredData), [filteredData, state.monthlyIncome]);
+
+  const previousMonthData = useMemo(() => {
+    const prevDate = addMonths(targetDate, -1);
+    return state.transactions.filter((t) => {
+      if (t.deleted) return false;
+      const tDate = new Date(t.date);
+      const comp = t.competenceMonth || `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+      const sameMonth = comp === `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      const samePerson = personFilter === 'All' || t.personId === personFilter;
+      const samePayment = paymentFilter === 'All' || t.paymentMethod === paymentFilter;
+      const sameStatus = statusFilter === 'All' || t.status === statusFilter;
+      return sameMonth && samePerson && samePayment && sameStatus;
+    });
+  }, [state.transactions, targetDate, personFilter, paymentFilter, statusFilter]);
+
+  const previousStats = useMemo(() => computeStats(previousMonthData), [previousMonthData, state.monthlyIncome]);
 
   // Calculate Breakdown for Life Cost by Category
   const lifeCostCategories = useMemo(() => {
@@ -89,6 +105,23 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   }, [filteredData, stats.lifeCost]);
 
   const lifeChartData = useMemo(() => lifeCostCategories.map((c) => ({ name: c.name, value: c.amount })), [lifeCostCategories]);
+
+  const savingsRate = useMemo(() => {
+    if (stats.income <= 0) return 0;
+    return Math.round(((stats.income - stats.realCost) / stats.income) * 100);
+  }, [stats.income, stats.realCost]);
+
+  const topCategories = useMemo(() => lifeCostCategories.slice(0, 3).map((c) => c.name).join(', '), [lifeCostCategories]);
+
+  const variance = useMemo(() => {
+    const diff = stats.realCost - previousStats.realCost;
+    const pct = previousStats.realCost > 0 ? Math.round((diff / previousStats.realCost) * 100) : 0;
+    return { diff, pct };
+  }, [stats.realCost, previousStats.realCost]);
+
+  const varianceValue = `${variance.diff >= 0 ? '+' : '-'}R$ ${formatCurrency(Math.abs(variance.diff))}`;
+  const varianceSubtitle =
+    previousStats.realCost > 0 ? `${variance.pct >= 0 ? '+' : ''}${variance.pct}% vs mês anterior` : 'Sem base no mês anterior';
 
   const monthlySeries = useMemo(() => {
     const map: Record<string, { month: string; gasto: number; juros: number; order: number }> = {};
@@ -125,6 +158,36 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   };
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e', '#8b5cf6', '#22d3ee', '#a855f7'];
+
+  const filterChips = [
+    personFilter !== 'All'
+      ? {
+          id: 'person',
+          label: `Pessoa: ${personFilter === 'alan' ? 'Alan' : personFilter === 'kellen' ? 'Kellen' : 'Casa'}`,
+          onRemove: () => setPersonFilter('All'),
+        }
+      : null,
+    paymentFilter !== 'All'
+      ? {
+          id: 'payment',
+          label: `Pagamento: ${paymentFilter}`,
+          onRemove: () => setPaymentFilter('All'),
+        }
+      : null,
+    statusFilter !== 'All'
+      ? {
+          id: 'status',
+          label: `Status: ${statusFilter === 'paid' ? 'Pagos' : 'Pendentes'}`,
+          onRemove: () => setStatusFilter('All'),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ id: string; label: string; onRemove: () => void }>;
+
+  const clearFilters = () => {
+    setPersonFilter('All');
+    setPaymentFilter('All');
+    setStatusFilter('All');
+  };
 
   const plansView = useMemo(() => {
     return (state.installmentPlans || [])
@@ -212,9 +275,6 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
               {activeTab === 'future' && "Projeção e planejamento"}
             </p>
           </div>
-          <button className="p-2 bg-zinc-900 rounded-full text-zinc-400 border border-zinc-800">
-            <Icons.Filter size={18} />
-          </button>
         </div>
 
         {/* Temporal Tabs */}
@@ -244,7 +304,25 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
       {/* 2. Content Areas */}
       <div className="p-4 space-y-6 overflow-y-auto">
-        
+        {/* === RESUMO EXECUTIVO === */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KpiCard
+            title="Taxa de poupança"
+            value={`${savingsRate}%`}
+            subtitle="Saldo sobre renda"
+          />
+          <KpiCard
+            title="Top categorias"
+            value={topCategories || 'Sem dados'}
+            subtitle="Custo de vida"
+          />
+          <KpiCard
+            title="Variação mensal"
+            value={varianceValue}
+            subtitle={varianceSubtitle}
+          />
+        </div>
+
         {/* === FILTER CHIPS === */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
            {(['All', 'alan', 'kellen', 'casa'] as const).map(p => (
@@ -279,6 +357,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
              <option value="pending">Pendentes</option>
            </select>
         </div>
+        <FilterChips chips={filterChips} onClear={clearFilters} />
 
         {/* === SUMMARY CARDS === */}
         <div className="grid grid-cols-2 gap-3">
@@ -371,7 +450,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
               <div>
                 <p className="text-sm text-white font-bold">{installmentPlan.description}</p>
                 <p className="text-[10px] text-zinc-500">
-                  {installmentPlan.totalInstallments}x de R$ {Number(installmentPlan.perInstallmentAmount || 0).toLocaleString()} · cartão {installmentPlan.cardId || '-'}
+                  {installmentPlan.totalInstallments}x de R$ {formatCurrency(Number(installmentPlan.perInstallmentAmount || 0))} · cartão {installmentPlan.cardId || '-'}
                 </p>
                 <p className="text-[10px] text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
               </div>
@@ -436,7 +515,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                         <div key={cat.name} className="space-y-1">
                             <div className="flex justify-between text-[10px] text-zinc-300">
                                 <span>{cat.name}</span>
-                                <span>{Math.round(cat.percentage)}% <span className="text-zinc-500 ml-1">(R$ {cat.amount.toLocaleString()})</span></span>
+                                <span>{Math.round(cat.percentage)}% <span className="text-zinc-500 ml-1">(R$ {formatCurrency(cat.amount)})</span></span>
                             </div>
                             <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-500/60" style={{ width: `${cat.percentage}%` }}></div>
@@ -484,46 +563,13 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 <div className={`px-4 py-2 text-xs font-bold flex justify-between ${
                   type === 'fee_interest' ? 'bg-rose-500/10 text-rose-400' : 'bg-zinc-800 text-zinc-400'
                 }`}>
-                  <span>{type}</span>
-                  <span>R$ {items.reduce((a,b) => a + Number(b.amount || 0), 0).toLocaleString()}</span>
+                  <span>{formatKindLabel(type)}</span>
+                  <span>R$ {formatCurrency(items.reduce((a,b) => a + Number(b.amount || 0), 0))}</span>
                 </div>
                 
                 <div className="divide-y divide-zinc-800/50">
-                  {items.map(t => (
-                    <div key={t.id} className="px-4 py-3 flex justify-between items-center group">
-                      <div>
-                        <div className="text-sm text-zinc-200 font-medium">{t.description}</div>
-                        <div className="text-[10px] text-zinc-500 flex gap-2">
-                           <span>{new Date(t.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}</span>
-                           <span>•</span>
-                           <span>{t.categoryId || '-'}</span>
-                           <span>•</span>
-                           <span className="uppercase">{t.personId || '-'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-mono text-zinc-300">R$ {Number(t.amount || 0).toLocaleString()}</span>
-                        <button 
-                          className="text-zinc-600 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
-                          onClick={() => onQuickAddDraft?.({
-                            amount: t.amount,
-                            description: t.description,
-                            categoryId: t.categoryId,
-                            kind: t.kind,
-                            paymentMethod: t.paymentMethod,
-                            cardId: t.cardId,
-                            personId: t.personId,
-                            status: 'paid',
-                            date: new Date().toISOString(),
-                            direction: t.direction,
-                            competenceMonth: t.competenceMonth,
-                          })}
-                          title="Relançar/ajustar este item"
-                        >
-                          <Icons.Edit size={14} />
-                        </button>
-                      </div>
-                    </div>
+                  {items.map((t) => (
+                    <TransactionRow key={t.id} transaction={t} onQuickAdd={onQuickAddDraft} />
                   ))}
                 </div>
               </div>
@@ -546,10 +592,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         
         {/* Empty State */}
         {filteredData.length === 0 && (
-          <div className="text-center py-12 text-zinc-600">
-            <Icons.Filter className="mx-auto mb-2 opacity-50" size={32} />
-            <p className="text-sm">Nenhum registro encontrado para este filtro.</p>
-          </div>
+          <EmptyState title="Nenhum registro encontrado" description="Ajuste filtros ou altere o mês." />
         )}
 
       </div>

@@ -49,13 +49,13 @@ const getErrorMessage = async (response: Response) => {
   return undefined;
 };
 
-export const syncAppState = async (state: AppState): Promise<SyncResponse | null> => {
+export const syncAppState = async (state: AppState, options?: { force?: boolean }): Promise<SyncResponse | null> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return null;
   }
 
   const now = Date.now();
-  if (shouldSkipSync(now)) {
+  if (!options?.force && shouldSkipSync(now)) {
     return null;
   }
 

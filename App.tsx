@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { QuickAdd } from './components/QuickAdd';
 import { Passivos } from './components/Passivos';
@@ -8,6 +8,11 @@ import { Icons } from './components/Icons';
 import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/categories';
 import { syncAppState } from './services/syncService';
+import { TrustBar } from './components/ui/TrustBar';
+import { BottomSheetModal } from './components/ui/BottomSheetModal';
+import { SetupProgressCard } from './components/ui/SetupProgressCard';
+import { ToastAction } from './components/ui/ToastAction';
+import { formatRelativeTime } from './utils/format';
 
 const SCHEMA_VERSION = 2;
 
@@ -160,6 +165,152 @@ const loadPersistedState = (): AppState => {
   }
 };
 
+const buildDemoState = (): AppState => {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 5);
+  const monthMid = new Date(now.getFullYear(), now.getMonth(), 12);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth(), 24);
+  const futureCharge = new Date(now.getFullYear(), now.getMonth(), 28);
+
+  const demoCards: Card[] = [
+    {
+      id: 'demo-nubank',
+      name: 'Nubank',
+      dueDay: 5,
+      closingDay: 28,
+      limit: 12000,
+      aprMonthly: 12,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    },
+    {
+      id: 'demo-xp',
+      name: 'XP Visa',
+      dueDay: 15,
+      closingDay: 5,
+      limit: 20000,
+      aprMonthly: 8,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    },
+  ];
+
+  const demoTransactions: Transaction[] = [
+    {
+      id: 'demo-1',
+      date: monthStart.toISOString(),
+      competenceMonth: deriveCompetence(monthStart.toISOString()),
+      direction: 'in',
+      kind: 'income',
+      amount: 12000,
+      description: 'Salário',
+      personId: 'alan',
+      categoryId: 'Salário',
+      paymentMethod: 'pix',
+      status: 'paid',
+      needsSync: false,
+    },
+    {
+      id: 'demo-2',
+      date: monthStart.toISOString(),
+      competenceMonth: deriveCompetence(monthStart.toISOString()),
+      direction: 'out',
+      kind: 'expense',
+      amount: 3200,
+      description: 'Aluguel',
+      personId: 'casa',
+      categoryId: 'Moradia',
+      paymentMethod: 'pix',
+      status: 'paid',
+      needsSync: false,
+    },
+    {
+      id: 'demo-3',
+      date: monthMid.toISOString(),
+      competenceMonth: deriveCompetence(monthMid.toISOString()),
+      direction: 'out',
+      kind: 'expense',
+      amount: 680,
+      description: 'Mercado',
+      personId: 'casa',
+      categoryId: 'Alimentação',
+      paymentMethod: 'debit',
+      status: 'paid',
+      needsSync: false,
+    },
+    {
+      id: 'demo-4',
+      date: monthEnd.toISOString(),
+      competenceMonth: deriveCompetence(monthEnd.toISOString()),
+      direction: 'out',
+      kind: 'expense',
+      amount: 1250,
+      description: 'Notebook',
+      personId: 'alan',
+      categoryId: 'Compras',
+      paymentMethod: 'credit',
+      cardId: demoCards[0].id,
+      status: 'pending',
+      needsSync: false,
+    },
+    {
+      id: 'demo-5',
+      date: futureCharge.toISOString(),
+      competenceMonth: deriveCompetence(futureCharge.toISOString()),
+      direction: 'out',
+      kind: 'fee_interest',
+      amount: 120,
+      description: 'Juros parcelamento',
+      personId: 'alan',
+      categoryId: 'Taxas',
+      paymentMethod: 'credit',
+      cardId: demoCards[0].id,
+      status: 'pending',
+      needsSync: false,
+    },
+    {
+      id: 'demo-6',
+      date: monthEnd.toISOString(),
+      competenceMonth: deriveCompetence(monthEnd.toISOString()),
+      direction: 'out',
+      kind: 'debt_payment',
+      amount: 2400,
+      description: 'Pagamento fatura Nubank',
+      personId: 'alan',
+      categoryId: 'Taxas',
+      paymentMethod: 'pix',
+      cardId: demoCards[0].id,
+      status: 'paid',
+      needsSync: false,
+    },
+    {
+      id: 'demo-7',
+      date: monthMid.toISOString(),
+      competenceMonth: deriveCompetence(monthMid.toISOString()),
+      direction: 'out',
+      kind: 'transfer',
+      amount: 800,
+      description: 'Reserva',
+      personId: 'alan',
+      categoryId: 'Investimento',
+      paymentMethod: 'pix',
+      status: 'paid',
+      needsSync: false,
+    },
+  ].map(normalizeTransaction);
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    monthlyIncome: 12000,
+    variableCap: 3600,
+    categories: INITIAL_CATEGORIES,
+    cards: demoCards.map(normalizeCard),
+    installmentPlans: [],
+    transactions: demoTransactions,
+    updatedAt: nowIso(),
+  };
+};
+
 const getInitialView = (): View => {
   if (typeof window === 'undefined') return 'dashboard';
   const hash = window.location.hash.replace('#/', '').replace('#', '');
@@ -175,14 +326,48 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>(loadPersistedState);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type?: 'success' | 'error';
+    actionLabel?: string;
+    onAction?: () => void;
+    secondaryLabel?: string;
+    onSecondary?: () => void;
+    durationMs?: number;
+  } | null>(null);
   const [quickAddDraft, setQuickAddDraft] = useState<TransactionDraft | null>(null);
   const [lastGeneration, setLastGeneration] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [swUpdateReady, setSwUpdateReady] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number>(0);
   const [forceSync, setForceSync] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [showTrustDetails, setShowTrustDetails] = useState(false);
+  const [forceSetupOpen, setForceSetupOpen] = useState(false);
+  const [hasBudgetConfigured, setHasBudgetConfigured] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('cockpit-setup-budget') === 'true';
+  });
+  const toastTimerRef = useRef<number | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+  const undoSnapshotRef = useRef<AppState | null>(null);
+  const [undoExpiresAt, setUndoExpiresAt] = useState<number | null>(null);
+
+  const pendingCount = useMemo(
+    () => state.transactions.filter((t) => t.needsSync && !t.deleted).length,
+    [state.transactions]
+  );
+
+  const hasCard = useMemo(() => state.cards.some((c) => !c.deleted), [state.cards]);
+  const hasTransaction = useMemo(() => state.transactions.some((t) => !t.deleted), [state.transactions]);
+  const isSetupComplete = hasBudgetConfigured && hasCard && hasTransaction;
+  const showSetupCard = !isSetupComplete || forceSetupOpen;
+
+  const lastUsedTransaction = useMemo(() => {
+    const items = state.transactions.filter((t) => !t.deleted);
+    if (items.length === 0) return null;
+    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  }, [state.transactions]);
 
   useEffect(() => {
     try {
@@ -232,23 +417,20 @@ const App: React.FC = () => {
     const handler = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event);
-      setShowInstallBanner(true);
     };
     window.addEventListener('beforeinstallprompt', handler as any);
     return () => window.removeEventListener('beforeinstallprompt', handler as any);
   }, []);
 
-  useEffect(() => {
-    if (!isOnline) return;
-    let mounted = true;
-
-    const attemptSync = async (force = false) => {
-      if (!mounted || isSyncing) return;
+  const runSync = useCallback(
+    async (force = false) => {
+      if (!isOnline || isSyncing) return;
       const now = Date.now();
       if (!force && now - lastSyncAt < 3000) return;
       setIsSyncing(true);
+      setSyncError(null);
       try {
-        const result = await syncAppState(state);
+        const result = await syncAppState(state, { force });
         if (result?.state) {
           setState({
             ...result.state,
@@ -257,19 +439,33 @@ const App: React.FC = () => {
             installmentPlans: result.state.installmentPlans.map(normalizePlan),
           });
           setLastSyncAt(Date.now());
-          pushToast('Sincronizado com a nuvem');
+          if (force || pendingCount > 0) {
+            pushToast('Sincronizado com a nuvem');
+          }
         }
       } catch (error) {
         console.error('Erro ao sincronizar', error);
+        setSyncError(error instanceof Error ? error.message : 'Erro ao sincronizar');
         pushToast('Falha na sincronização. Tentaremos novamente.', 'error');
       } finally {
         setIsSyncing(false);
         if (force) setForceSync(false);
       }
+    },
+    [isOnline, isSyncing, lastSyncAt, pendingCount, pushToast, state]
+  );
+
+  useEffect(() => {
+    if (!isOnline) return;
+    let mounted = true;
+
+    const attemptSync = async (force = false) => {
+      if (!mounted) return;
+      await runSync(force);
     };
 
     attemptSync(forceSync);
-    const interval = setInterval(attemptSync, 20000);
+    const interval = setInterval(() => attemptSync(), 20000);
     const visibilityHandler = () => {
       if (document.visibilityState === 'visible') {
         attemptSync();
@@ -282,11 +478,67 @@ const App: React.FC = () => {
       clearInterval(interval);
       window.removeEventListener('visibilitychange', visibilityHandler);
     };
-  }, [isOnline, isSyncing, state.updatedAt, lastSyncAt, forceSync]);
+  }, [forceSync, isOnline, runSync]);
 
-  const pushToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 2400);
+  const pushToast = useCallback(
+    (
+      message: string,
+      type: 'success' | 'error' = 'success',
+      options?: {
+        actionLabel?: string;
+        onAction?: () => void;
+        secondaryLabel?: string;
+        onSecondary?: () => void;
+        durationMs?: number;
+      }
+    ) => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+      setToast({
+        message,
+        type,
+        actionLabel: options?.actionLabel,
+        onAction: options?.onAction,
+        secondaryLabel: options?.secondaryLabel,
+        onSecondary: options?.onSecondary,
+        durationMs: options?.durationMs,
+      });
+      const duration = options?.durationMs ?? 2400;
+      toastTimerRef.current = window.setTimeout(() => setToast(null), duration);
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!undoExpiresAt) return;
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    const delay = Math.max(undoExpiresAt - Date.now(), 0);
+    undoTimerRef.current = window.setTimeout(() => {
+    undoSnapshotRef.current = null;
+      setUndoExpiresAt(null);
+    }, delay);
+  }, [undoExpiresAt]);
+
+  const queueUndo = (snapshot: AppState) => {
+    undoSnapshotRef.current = snapshot;
+    setUndoExpiresAt(Date.now() + 30000);
+  };
+
+  const handleUndo = () => {
+    const snapshot = undoSnapshotRef.current;
+    if (!snapshot) return;
+    setState({ ...snapshot, updatedAt: nowIso() });
+    undoSnapshotRef.current = null;
+    setUndoExpiresAt(null);
+    pushToast('Lançamento desfeito');
   };
 
   const handleAddTransactions = (
@@ -308,14 +560,25 @@ const App: React.FC = () => {
       };
     });
 
-    setState((prev) => ({
-      ...prev,
-      transactions: [...prev.transactions, ...processedTx],
-      installmentPlans: options?.newPlan ? [...prev.installmentPlans, normalizePlan({ ...options.newPlan, updatedAt: nowIso() })] : prev.installmentPlans,
-      updatedAt: nowIso(),
-    }));
+    setState((prev) => {
+      queueUndo(prev);
+      return {
+        ...prev,
+        transactions: [...prev.transactions, ...processedTx],
+        installmentPlans: options?.newPlan
+          ? [...prev.installmentPlans, normalizePlan({ ...options.newPlan, updatedAt: nowIso() })]
+          : prev.installmentPlans,
+        updatedAt: nowIso(),
+      };
+    });
 
-    pushToast(isOnline ? 'Lançamento salvo' : 'Salvo offline. Sincroniza quando voltar à rede.');
+    pushToast(isOnline ? 'Lançamento salvo' : 'Salvo offline. Sincroniza quando voltar à rede.', 'success', {
+      actionLabel: 'Desfazer',
+      onAction: handleUndo,
+      secondaryLabel: 'Ver no mês',
+      onSecondary: () => setCurrentView('dashboard'),
+      durationMs: 30000,
+    });
     if (!options?.stayOnAdd) {
       setCurrentView('dashboard');
       setQuickAddDraft(null);
@@ -398,8 +661,27 @@ const App: React.FC = () => {
       variableCap: payload.variableCap ?? prev.variableCap,
       updatedAt: nowIso(),
     }));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('cockpit-setup-budget', 'true');
+    }
+    setHasBudgetConfigured(true);
     pushToast('Planejamento atualizado');
   };
+
+  const handleSeedDemo = () => {
+    const demo = buildDemoState();
+    setState(demo);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('cockpit-setup-budget', 'true');
+    }
+    setHasBudgetConfigured(true);
+    setForceSetupOpen(false);
+    pushToast('Dados demo carregados');
+  };
+
+  const handleOpenSetup = () => setForceSetupOpen(true);
+
+  const handleDismissSetup = () => setForceSetupOpen(false);
 
   const handleOpenQuickAddWithDraft = (draft: TransactionDraft) => {
     setQuickAddDraft(draft);
@@ -411,13 +693,7 @@ const App: React.FC = () => {
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     setInstallPrompt(null);
-    setShowInstallBanner(false);
     pushToast(outcome === 'accepted' ? 'PWA instalado' : 'Instalação cancelada', outcome === 'accepted' ? 'success' : 'error');
-  };
-
-  const dismissInstallBanner = () => {
-    setShowInstallBanner(false);
-    setInstallPrompt(null);
   };
 
   const NavButton = ({ view, icon: Icon, label, desktop }: { view: View, icon: any, label: string, desktop?: boolean }) => (
@@ -457,6 +733,14 @@ const App: React.FC = () => {
             <NavButton view="plan" icon={Icons.Plan} label="Planejamento" desktop />
         </nav>
 
+        <button
+            onClick={handleOpenSetup}
+            className="mb-3 w-full rounded-xl border border-zinc-800 px-4 py-2 text-left text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center gap-2"
+        >
+            <Icons.Help size={16} />
+            Ajuda/Setup
+        </button>
+
         <button 
             onClick={() => setCurrentView('add')}
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
@@ -477,25 +761,20 @@ const App: React.FC = () => {
 
       {/* === MAIN CONTENT WRAPPER === */}
       <main className="flex-1 relative flex flex-col h-screen overflow-hidden bg-black md:bg-zinc-950/50">
-        
-        {/* Network / generation signals */}
-        {!isOnline && (
-          <div className="px-4 py-2 text-xs bg-amber-500/10 text-amber-300 border-b border-amber-500/30 flex items-center gap-2">
-            <Icons.Alert size={14} /> Modo offline: novos lançamentos ficam pendentes para sincronizar.
-          </div>
+        {currentView !== 'add' && (
+          <TrustBar
+            isOnline={isOnline}
+            isSyncing={isSyncing}
+            lastSyncAt={lastSyncAt}
+            pendingCount={pendingCount}
+            syncError={syncError}
+            canInstall={!!installPrompt}
+            onInstall={handleInstallClick}
+            onSyncNow={() => runSync(true)}
+            onOpenDetails={() => setShowTrustDetails(true)}
+          />
         )}
-        {isSyncing && (
-          <div className="px-4 py-2 text-xs bg-emerald-500/10 text-emerald-200 border-b border-emerald-500/30 flex items-center gap-2">
-            <Icons.Loader className="animate-spin" size={14} /> Sincronizando lançamentos...
-          </div>
-        )}
-        {lastGeneration && (
-          <div className="px-4 py-2 text-xs bg-emerald-500/10 text-emerald-200 border-b border-emerald-500/30 flex items-center justify-between">
-            <span>{lastGeneration}</span>
-            <button onClick={() => setLastGeneration(null)} className="text-emerald-400 hover:text-white text-[10px]">OK</button>
-          </div>
-        )}
-        
+
         {/* Mobile Header (Hidden on Desktop) */}
         {currentView !== 'add' && (
           <header className="md:hidden px-6 pt-6 pb-2 flex justify-between items-center bg-zinc-950/80 backdrop-blur sticky top-0 z-10 flex-shrink-0">
@@ -507,8 +786,17 @@ const App: React.FC = () => {
                 {currentView === 'reports' ? 'Inteligência' : 'Meu Mês'}
               </p>
             </div>
-            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
-              AL
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenSetup}
+                className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-white"
+                aria-label="Ajuda e setup"
+              >
+                <Icons.Help size={16} />
+              </button>
+              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
+                AL
+              </div>
             </div>
           </header>
         )}
@@ -517,6 +805,38 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth">
             {/* Desktop Center Container - constrained for readability but wider than mobile */}
             <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
+                {showSetupCard && currentView !== 'add' && (
+                  <div className="p-4">
+                    <SetupProgressCard
+                      isComplete={isSetupComplete}
+                      onSeedDemo={handleSeedDemo}
+                      onDismiss={isSetupComplete ? handleDismissSetup : undefined}
+                      steps={[
+                        {
+                          id: 'budget',
+                          label: 'Definir renda e teto',
+                          done: hasBudgetConfigured,
+                          ctaLabel: 'Ir para Planejamento',
+                          onClick: () => setCurrentView('plan'),
+                        },
+                        {
+                          id: 'card',
+                          label: 'Cadastrar 1 cartão',
+                          done: hasCard,
+                          ctaLabel: 'Ir para Cartões',
+                          onClick: () => setCurrentView('debts'),
+                        },
+                        {
+                          id: 'tx',
+                          label: 'Criar 1 lançamento',
+                          done: hasTransaction,
+                          ctaLabel: 'Ir para Novo',
+                          onClick: () => setCurrentView('add'),
+                        },
+                      ]}
+                    />
+                  </div>
+                )}
                 {currentView === 'dashboard' && (
                   <Dashboard 
                     state={state} 
@@ -541,6 +861,7 @@ const App: React.FC = () => {
                       availableCategories={state.categories}
                       availableCards={state.cards.filter((c) => !c.deleted)}
                       onAddCard={handleAddCard}
+                      lastUsed={lastUsedTransaction}
                       draft={quickAddDraft}
                       onClearDraft={() => setQuickAddDraft(null)}
                       isOnline={isOnline}
@@ -597,30 +918,51 @@ const App: React.FC = () => {
           </nav>
         )}
 
-        {showInstallBanner && (
-          <div className="fixed bottom-24 right-4 left-4 md:left-auto md:w-80 bg-zinc-900 border border-emerald-500/30 rounded-2xl p-4 shadow-2xl z-50">
-            <div className="flex justify-between items-start gap-2">
-              <div>
-                <p className="text-sm font-bold text-white">Instale o Cockpit</p>
-                <p className="text-xs text-zinc-400">Acesso offline, full-screen e carregamento mais rápido.</p>
-              </div>
-              <button onClick={dismissInstallBanner} className="text-zinc-500 hover:text-white">
-                <Icons.Close size={14} />
-              </button>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button onClick={handleInstallClick} className="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-bold hover:bg-emerald-500">Instalar</button>
-              <button onClick={dismissInstallBanner} className="px-3 py-2 rounded-xl text-sm text-zinc-400 border border-zinc-800">Depois</button>
-            </div>
+      </main>
+
+      <BottomSheetModal
+        open={showTrustDetails}
+        onClose={() => setShowTrustDetails(false)}
+        title="Status da sincronização"
+        actions={
+          <button
+            onClick={() => runSync(true)}
+            disabled={!isOnline}
+            className="flex-1 rounded-xl bg-emerald-600 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Sincronizar agora
+          </button>
+        }
+      >
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>Status</span>
+          <span className="text-zinc-200">{isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>Pendências</span>
+          <span className="text-zinc-200">{pendingCount}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>Última sincronização</span>
+          <span className="text-zinc-200">{formatRelativeTime(lastSyncAt)}</span>
+        </div>
+        {syncError && (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">
+            {syncError}
           </div>
         )}
-      </main>
+      </BottomSheetModal>
       
       {toast && (
-        <div className={`fixed bottom-6 right-4 left-4 md:left-auto md:w-72 p-3 rounded-xl shadow-2xl border text-sm ${
-          toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/40 text-rose-100' : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-100'
-        }`}>
-          {toast.message}
+        <div className="fixed bottom-6 right-4 left-4 md:left-auto md:w-80 z-50">
+          <ToastAction
+            message={toast.message}
+            type={toast.type}
+            actionLabel={toast.actionLabel}
+            onAction={toast.onAction}
+            secondaryLabel={toast.secondaryLabel}
+            onSecondary={toast.onSecondary}
+          />
         </div>
       )}
       {swUpdateReady && (

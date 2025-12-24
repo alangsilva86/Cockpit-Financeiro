@@ -44,3 +44,20 @@ create table if not exists public.app_states (
   updated_at timestamptz not null default now()
 );
 ```
+
+## Fluxos de teste (QA)
+1. Setup (usuário novo):
+   - Abrir app → ver Setup Progress.
+   - Definir renda/teto → cadastrar 1 cartão → criar 1 lançamento.
+   - Setup some automaticamente.
+2. Compra parcelada 10x:
+   - Novo Lançamento → Compra → Crédito → Parcelado 10x.
+   - Em Cartões: aparece parcela do mês e plano.
+   - Cancelar futuras → futuras somem, histórico mantém auditável.
+3. Pagamento do cartão:
+   - Meu Mês → Próximos 7 dias → “Pagar agora”.
+   - Novo Lançamento abre prefill em `debt_payment`.
+   - Confirmar → Cartões mostra pagamento no bloco “Pagamentos (caixa)”.
+4. Relatórios em 10s:
+   - Abrir Relatórios → resumo executivo aparece.
+   - Filtros e mês alteram conteúdo.
