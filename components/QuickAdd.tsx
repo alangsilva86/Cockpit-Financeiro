@@ -134,6 +134,11 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
     }
   }, [availableCards, selectedCardId]);
 
+  const displayedCategories = useMemo(() => {
+    if (kind === 'income') return INCOME_CATEGORIES;
+    return availableCategories.filter(cat => !INCOME_CATEGORIES.includes(cat));
+  }, [kind, availableCategories]);
+
   useEffect(() => {
     let active = true; 
     const timer = setTimeout(async () => {
@@ -169,11 +174,6 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
     if (draft.personId) setPersonId(draft.personId);
     if (draft.date) setDate(draft.date.split('T')[0]);
   }, [draft]);
-
-  const displayedCategories = useMemo(() => {
-    if (kind === 'income') return INCOME_CATEGORIES;
-    return availableCategories.filter(cat => !INCOME_CATEGORIES.includes(cat));
-  }, [kind, availableCategories]);
 
   const progress = useMemo(() => {
     const checkpoints = [

@@ -1,8 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AppState, InstallmentPlan, PaymentMethod, PersonId, Transaction } from '../types';
 import { Icons } from './Icons';
 import { generateFinancialInsight } from '../services/aiClient';
 import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, CartesianGrid } from 'recharts';
+
+const formatCurrency = (value?: number) =>
+  new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value ?? 0);
 
 interface ReportsProps {
   state: AppState;
@@ -62,7 +65,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
     const totalPaid = lifeCost + burn + debtPrincipal + transfer;
     const realCost = lifeCost + burn;
 
-    return { income, lifeCost, burn, debtPrincipal, transfer, totalPaid, realCost };
+    return { income, lifeCost, burn, debtPrincipal, transfer, totalPaid, realCost, rollover: transfer };
   }, [filteredData, state.monthlyIncome]);
 
   // Calculate Breakdown for Life Cost by Category
@@ -270,12 +273,12 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Custo Real (Vida + Juros)</span>
-            <span className="text-xl font-bold text-white block">R$ {stats.realCost.toLocaleString()}</span>
+            <span className="text-xl font-bold text-white block">R$ {formatCurrency(stats.realCost)}</span>
             <span className="text-[10px] text-zinc-600">Sem rolagens/neutros</span>
           </div>
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Total Movimentado</span>
-             <span className="text-xl font-bold text-zinc-400 block">R$ {stats.totalPaid.toLocaleString()}</span>
+             <span className="text-xl font-bold text-zinc-400 block">R$ {formatCurrency(stats.totalPaid)}</span>
              <span className="text-[10px] text-zinc-600">Inclui rolagens</span>
           </div>
         </div>
@@ -352,18 +355,18 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
             <span className="text-[10px] text-zinc-500">{plansView.length} ativos</span>
           </div>
           {plansView.length === 0 && <p className="text-xs text-zinc-500">Nenhum parcelamento.</p>}
-          {plansView.map(({ plan, remaining, nextDate, totalGenerated }) => (
-            <div key={plan.id} className="border border-zinc-800 rounded-xl p-3 flex justify-between items-start">
+          {plansView.map(({ plan: installmentPlan, remaining, nextDate, totalGenerated }) => (
+            <div key={installmentPlan.id} className="border border-zinc-800 rounded-xl p-3 flex justify-between items-start">
               <div>
-                <p className="text-sm text-white font-bold">{plan.description}</p>
+                <p className="text-sm text-white font-bold">{installmentPlan.description}</p>
                 <p className="text-[10px] text-zinc-500">
-                  {plan.totalInstallments}x de R$ {plan.perInstallmentAmount.toLocaleString()} · cartão {plan.cardId || '-'}
+                  {installmentPlan.totalInstallments}x de R$ {Number(installmentPlan.perInstallmentAmount || 0).toLocaleString()} · cartão {installmentPlan.cardId || '-'}
                 </p>
                 <p className="text-[10px] text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleCancelPlan(plan.id)}
+                  onClick={() => handleCancelPlan(installmentPlan.id)}
                   disabled={!onUpdateInstallments}
                   className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
                 >
@@ -371,8 +374,8 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 </button>
                 <button
                   onClick={() => onUpdateInstallments?.(
-                    state.installmentPlans.map((p) => p.id === plan.id ? { ...p, status: 'finished', remainingInstallments: 0 } : p),
-                    state.transactions.map((t) => t.installment?.groupId === plan.id && t.status === 'pending'
+                    state.installmentPlans.map((p) => p.id === installmentPlan.id ? { ...p, status: 'finished', remainingInstallments: 0 } : p),
+                    state.transactions.map((t) => t.installment?.groupId === installmentPlan.id && t.status === 'pending'
                       ? { ...t, status: 'paid', date: new Date().toISOString(), competenceMonth: t.competenceMonth || '', needsSync: true }
                       : t)
                   )}
@@ -404,7 +407,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                             <Icons.ChevronDown size={12} className={`transition-transform duration-300 ${showLifeDetails ? 'rotate-180' : ''}`} />
                         )}
                     </span>
-                    <span className="text-zinc-300">R$ {stats.lifeCost.toLocaleString()}</span>
+                    <span className="text-zinc-300">R$ {formatCurrency(stats.lifeCost)}</span>
                 </div>
                 <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500" style={{ width: `${getPercentage(stats.lifeCost, stats.totalPaid)}%` }}></div>
@@ -438,7 +441,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
            <div className="space-y-1">
              <div className="flex justify-between text-xs mb-1">
                <span className="text-rose-500 font-bold flex items-center gap-1"><Icons.Burn size={12}/> Juros & Taxas</span>
-               <span className="text-zinc-300">R$ {stats.burn.toLocaleString()}</span>
+               <span className="text-zinc-300">R$ {formatCurrency(stats.burn)}</span>
              </div>
              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                <div className="h-full bg-rose-500" style={{ width: `${getPercentage(stats.burn, stats.totalPaid)}%` }}></div>
@@ -449,7 +452,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
            <div className="space-y-1 opacity-60">
              <div className="flex justify-between text-xs mb-1">
                <span className="text-zinc-500 font-bold">Rolagem (Neutro)</span>
-               <span className="text-zinc-500">R$ {stats.rollover.toLocaleString()}</span>
+               <span className="text-zinc-500">R$ {formatCurrency(stats.rollover)}</span>
              </div>
              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                <div className="h-full bg-zinc-600" style={{ width: `${getPercentage(stats.rollover, stats.totalPaid)}%` }}></div>

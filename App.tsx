@@ -174,7 +174,10 @@ const App: React.FC = () => {
     window.addEventListener('hashchange', handler);
     const swHandler = () => setSwUpdateReady(true);
     window.addEventListener('sw-update-ready', swHandler as any);
-    return () => window.removeEventListener('hashchange', handler);
+    return () => {
+      window.removeEventListener('hashchange', handler);
+      window.removeEventListener('sw-update-ready', swHandler as any);
+    };
   }, []);
 
   useEffect(() => {
