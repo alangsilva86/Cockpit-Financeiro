@@ -389,6 +389,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                   <label className="text-xs text-zinc-400 uppercase font-bold">Dia Vencimento</label>
                   <input 
                     type="number"
+                    inputMode="numeric"
                     value={newCardDay}
                     onChange={e => setNewCardDay(e.target.value)}
                     placeholder="Ex: 05"
@@ -514,6 +515,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
              <span className="text-2xl font-bold text-zinc-500 absolute -left-8 top-2">R$</span>
              <input 
                 type="number" 
+                inputMode="decimal"
                 autoFocus
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -656,6 +658,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                       <label className="text-[10px] text-zinc-500 uppercase font-bold">Parcelas (1-36)</label>
                       <input 
                         type="number"
+                        inputMode="numeric"
                         min={1}
                         max={36}
                         value={installmentsCount}
@@ -693,6 +696,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                         <label className="text-xs text-zinc-400">Quanto foi a taxa/juros? (R$)</label>
                         <input 
                         type="number"
+                        inputMode="decimal"
                         value={rolloverFee}
                         onChange={(e) => setRolloverFee(e.target.value)}
                         className="w-full bg-zinc-950 p-2 rounded-lg border border-zinc-700 text-rose-500 focus:border-rose-500 focus:outline-none mt-1"
