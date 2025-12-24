@@ -5,41 +5,112 @@ import { Passivos } from './components/Passivos';
 import { Planning } from './components/Planning';
 import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
-import { AppState, Debt, OperationType, Person, Transaction, TransactionDraft, View } from './types';
-import { INITIAL_CATEGORIES } from './services/geminiService';
+import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft } from './types';
+import { INITIAL_CATEGORIES } from './services/categories';
 import { syncTransactionsQueue } from './services/syncService';
 
-// Initial Mock Data with Future/Pending transactions for the Roadmap
+const SCHEMA_VERSION = 2;
+
+const deriveCompetence = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Initial Mock Data adapted ao novo modelo
 const INITIAL_STATE: AppState = {
+  schemaVersion: SCHEMA_VERSION,
   monthlyIncome: 25000,
   variableCap: 7500, // 30% of income rule
   categories: INITIAL_CATEGORIES,
-  transactions: [
-    // Past/Paid
-    { id: '1', date: new Date().toISOString(), amount: 200, person: Person.ALAN, description: 'Uber Semana', type: OperationType.VIDA, category: 'Transporte', paymentMethod: 'Credit', cardId: 'd1', status: 'paid', isRecurring: false },
-    
-    // Future/Pending (The Roadmap)
-    { id: '2', date: new Date(new Date().setDate(5)).toISOString(), amount: 2500, person: Person.CASA, description: 'Aluguel', type: OperationType.VIDA, category: 'Moradia', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
-    { id: '3', date: new Date(new Date().setDate(10)).toISOString(), amount: 650, person: Person.CASA, description: 'Condomínio', type: OperationType.VIDA, category: 'Moradia', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
-    { id: '4', date: new Date(new Date().setDate(12)).toISOString(), amount: 11200, person: Person.ALAN, description: 'Fatura XP (Estimada)', type: OperationType.ROLAGEM, category: 'Cartão', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
-    { id: '5', date: new Date(new Date().setDate(12)).toISOString(), amount: 400, person: Person.ALAN, description: 'Juros Antecipação XP', type: OperationType.JUROS, category: 'Taxas', paymentMethod: 'Debit', status: 'pending', isRecurring: false },
-    { id: '6', date: new Date(new Date().setDate(15)).toISOString(), amount: 800, person: Person.KELLEN, description: 'Mercado Semanal', type: OperationType.VIDA, category: 'Alimentação', paymentMethod: 'Credit', cardId: 'd2', status: 'pending', isRecurring: true },
+  cards: [
+    { id: 'd1', name: 'Nubank Black', dueDay: 5, closingDay: 28, aprMonthly: 14, limit: 20000 },
+    { id: 'd2', name: 'XP Infinite', dueDay: 15, closingDay: 5, aprMonthly: 8, limit: 30000 },
   ],
-  debts: [
-    { id: 'd1', name: 'Nubank Black', balance: 12400, currentInvoice: 3850, dueDate: '05', minPayment: 1500, rolloverCost: 14, status: 'critical' },
-    { id: 'd2', name: 'XP Infinite', balance: 3200, currentInvoice: 3200, dueDate: '15', minPayment: 500, rolloverCost: 8, status: 'ok' },
-  ]
+  installmentPlans: [],
+  transactions: [],
 };
 
-const STORAGE_KEY = 'cockpit-state-v1';
+const STORAGE_KEY = 'cockpit-state-v2';
 const VIEW_KEY = 'cockpit-view';
 
 const normalizeTransaction = (tx: Transaction): Transaction => {
-  const status = tx.status || (new Date(tx.date) > new Date() ? 'pending' : 'paid');
+  const status: Transaction['status'] = tx.status || (new Date(tx.date) > new Date() ? 'pending' : 'paid');
   return {
     ...tx,
+    competenceMonth: tx.competenceMonth || deriveCompetence(tx.date),
     status,
     needsSync: tx.needsSync ?? false,
+  };
+};
+
+type LegacyTransaction = any;
+type LegacyState = any;
+
+const mapLegacyTransaction = (tx: LegacyTransaction): Transaction => {
+  const type = tx.type || tx.kind;
+  const kindMap: Record<string, Transaction['kind']> = {
+    Receita: 'income',
+    Vida: 'expense',
+    Dívida: 'debt_payment',
+    Rolagem: 'transfer',
+    Juros: 'fee_interest',
+    Investimento: 'transfer',
+  };
+  const kind = kindMap[type] || tx.kind || 'expense';
+  const direction: Transaction['direction'] = kind === 'income' ? 'in' : 'out';
+  const paymentMethod = (tx.paymentMethod || '').toString().toLowerCase() as Transaction['paymentMethod'];
+  const personId = tx.person ? tx.person.toString().toLowerCase() : undefined;
+  return normalizeTransaction({
+    id: tx.id || Math.random().toString(36).slice(2),
+    date: tx.date || new Date().toISOString(),
+    competenceMonth: tx.competenceMonth || deriveCompetence(tx.date || new Date().toISOString()),
+    direction,
+    kind,
+    amount: tx.amount || 0,
+    description: tx.description || '',
+    personId,
+    categoryId: tx.category || tx.categoryId,
+    paymentMethod: paymentMethod || 'pix',
+    cardId: tx.cardId,
+    status: tx.status || 'pending',
+    tags: tx.tags,
+    installment: tx.installment,
+    isRecurring: tx.isRecurring,
+    needsSync: tx.needsSync,
+  });
+};
+
+const migrateState = (raw: LegacyState): AppState => {
+  if (!raw) return INITIAL_STATE;
+  if (raw.schemaVersion === SCHEMA_VERSION) {
+    return {
+      ...INITIAL_STATE,
+      ...raw,
+      transactions: (raw.transactions || []).map(normalizeTransaction),
+      installmentPlans: raw.installmentPlans || [],
+      cards: raw.cards || [],
+    };
+  }
+
+  const legacyTx = (raw.transactions || []).map(mapLegacyTransaction);
+  const legacyCards: Card[] =
+    (raw.debts || raw.cards || []).map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      dueDay: d.dueDate ? parseInt(d.dueDate, 10) : undefined,
+      aprMonthly: d.rolloverCost,
+      limit: d.balance,
+    })) || [];
+
+  return {
+    ...INITIAL_STATE,
+    schemaVersion: SCHEMA_VERSION,
+    transactions: legacyTx,
+    cards: legacyCards.length ? legacyCards : INITIAL_STATE.cards,
+    categories: raw.categories || INITIAL_CATEGORIES,
+    monthlyIncome: raw.monthlyIncome ?? INITIAL_STATE.monthlyIncome,
+    variableCap: raw.variableCap ?? INITIAL_STATE.variableCap,
+    installmentPlans: raw.installmentPlans || [],
   };
 };
 
@@ -49,17 +120,8 @@ const loadPersistedState = (): AppState => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return INITIAL_STATE;
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-
-    return {
-      ...INITIAL_STATE,
-      ...parsed,
-      transactions: (parsed.transactions || INITIAL_STATE.transactions).map(normalizeTransaction),
-      debts: parsed.debts || INITIAL_STATE.debts,
-      categories: parsed.categories || INITIAL_STATE.categories,
-      monthlyIncome: parsed.monthlyIncome ?? INITIAL_STATE.monthlyIncome,
-      variableCap: parsed.variableCap ?? INITIAL_STATE.variableCap,
-    };
+    const parsed = JSON.parse(raw);
+    return migrateState(parsed);
   } catch (error) {
     console.error('Erro ao hidratar estado, usando padrão', error);
     return INITIAL_STATE;
@@ -165,12 +227,16 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 2400);
   };
 
-  const handleAddTransactions = (newTx: Transaction[], options?: { stayOnAdd?: boolean }) => {
+  const handleAddTransactions = (
+    newTx: Transaction[],
+    options?: { stayOnAdd?: boolean; newPlan?: InstallmentPlan | null }
+  ) => {
     const now = new Date();
     const processedTx = newTx.map((t) => {
       const txDate = new Date(t.date);
       return {
         ...t,
+        competenceMonth: t.competenceMonth || deriveCompetence(t.date),
         status: t.status || (txDate > now ? 'pending' : 'paid'),
         needsSync: t.needsSync ?? !isOnline,
       };
@@ -179,6 +245,7 @@ const App: React.FC = () => {
     setState((prev) => ({
       ...prev,
       transactions: [...prev.transactions, ...processedTx],
+      installmentPlans: options?.newPlan ? [...prev.installmentPlans, options.newPlan] : prev.installmentPlans,
     }));
 
     pushToast(isOnline ? 'Lançamento salvo' : 'Salvo offline. Sincroniza quando voltar à rede.');
@@ -212,6 +279,7 @@ const App: React.FC = () => {
           ...t,
           id: Math.random().toString(36).substr(2, 9),
           date: d.toISOString(),
+          competenceMonth: deriveCompetence(d.toISOString()),
           status: 'pending' as const
         };
       });
@@ -226,17 +294,17 @@ const App: React.FC = () => {
     setCurrentView('dashboard');
   };
 
-  const handleAddDebt = (debt: Debt) => {
+  const handleAddCard = (card: Card) => {
     setState(prev => ({
       ...prev,
-      debts: [...prev.debts, debt]
+      cards: [...prev.cards, card]
     }));
   };
 
-  const handleUpdateDebt = (updatedDebt: Debt) => {
+  const handleUpdateCard = (updatedCard: Card) => {
     setState(prev => ({
       ...prev,
-      debts: prev.debts.map(d => d.id === updatedDebt.id ? updatedDebt : d)
+      cards: prev.cards.map(d => d.id === updatedCard.id ? updatedCard : d)
     }));
   };
 
@@ -388,6 +456,7 @@ const App: React.FC = () => {
                     onGenerateNextMonth={handleGenerateNextMonth} 
                     onQuickAddDraft={handleOpenQuickAddWithDraft}
                     onToast={pushToast}
+                    onUpdateInstallments={(plans, txs) => setState((prev) => ({ ...prev, installmentPlans: plans, transactions: txs }))}
                   />
                 )}
                 {currentView === 'add' && (
@@ -395,8 +464,8 @@ const App: React.FC = () => {
                       onAdd={handleAddTransactions} 
                       onCancel={() => setCurrentView('dashboard')} 
                       availableCategories={state.categories}
-                      availableCards={state.debts}
-                      onAddCard={handleAddDebt}
+                      availableCards={state.cards}
+                      onAddCard={handleAddCard}
                       draft={quickAddDraft}
                       onClearDraft={() => setQuickAddDraft(null)}
                       isOnline={isOnline}
@@ -405,9 +474,12 @@ const App: React.FC = () => {
                 )}
                 {currentView === 'debts' && (
                     <Passivos 
-                      debts={state.debts} 
-                      onAddDebt={handleAddDebt}
-                      onUpdateDebt={handleUpdateDebt}
+                      cards={state.cards} 
+                      transactions={state.transactions}
+                      installmentPlans={state.installmentPlans}
+                      onAddCard={handleAddCard}
+                      onUpdateCard={handleUpdateCard}
+                      onUpdateInstallments={(plans, txs) => setState((prev) => ({ ...prev, installmentPlans: plans, transactions: txs }))}
                       onQuickAddDraft={handleOpenQuickAddWithDraft}
                     />
                 )}
@@ -420,6 +492,8 @@ const App: React.FC = () => {
                       onAddCategory={handleAddCategory}
                       onBudgetChange={handleBudgetUpdate}
                       lastGeneration={lastGeneration}
+                      transactions={state.transactions}
+                      cards={state.cards}
                     />
                 )}
             </div>

@@ -1,54 +1,81 @@
-export enum OperationType {
-  RECEITA = 'Receita', // Salário, Extras, Vendas
-  VIDA = 'Vida', // Custo de Vida
-  DIVIDA = 'Dívida', // Amortização de Principal
-  ROLAGEM = 'Rolagem', // Transferência de Dívida (Neutro)
-  JUROS = 'Juros', // Custo Financeiro/Taxas
-  INVESTIMENTO = 'Investimento'
-}
+export type Direction = 'in' | 'out';
 
-export enum Person {
-  ALAN = 'Alan',
-  KELLEN = 'Kellen',
-  CASA = 'Casa'
-}
+export type TransactionKind =
+  | 'income'
+  | 'expense'
+  | 'transfer'
+  | 'debt_payment'
+  | 'fee_interest';
 
-export type PaymentMethod = 'Pix' | 'Debit' | 'Cash' | 'Credit';
+export type PaymentMethod = 'pix' | 'debit' | 'cash' | 'credit';
 
 export type TransactionStatus = 'pending' | 'paid';
+
+export type PersonId = 'alan' | 'kellen' | 'casa';
+
+export interface InstallmentInfo {
+  groupId: string;
+  number: number;
+  total: number;
+  originalTotalAmount: number;
+  perInstallmentAmount: number;
+  startDate: string;
+}
 
 export interface Transaction {
   id: string;
   date: string; // ISO date
+  competenceMonth: string; // YYYY-MM
+  direction: Direction;
+  kind: TransactionKind;
   amount: number;
-  person: Person;
   description: string;
-  type: OperationType;
-  category: string;
+  personId?: PersonId;
+  categoryId?: string;
   paymentMethod: PaymentMethod;
-  cardId?: string; // If Credit
+  cardId?: string; // Required when paymentMethod === 'credit'
   status: TransactionStatus;
-  isRecurring?: boolean; // Para clonar no próximo mês
-  needsSync?: boolean; // marcado quando criado offline
+  tags?: string[];
+  installment?: InstallmentInfo;
+  isRecurring?: boolean;
+  needsSync?: boolean;
 }
 
-export interface Debt {
+export interface InstallmentPlan {
+  id: string;
+  createdAt: string;
+  description: string;
+  personId?: PersonId;
+  categoryId: string;
+  cardId: string;
+  purchaseDate: string;
+  firstInstallmentDate: string;
+  totalInstallments: number;
+  totalAmount: number;
+  perInstallmentAmount: number;
+  status: 'active' | 'finished' | 'cancelled';
+  remainingInstallments: number;
+  notes?: string;
+}
+
+export interface Card {
   id: string;
   name: string;
-  balance: number; // Saldo devedor total
-  currentInvoice?: number; // Fatura que vence neste mês
-  dueDate: string; // Day of month
-  minPayment: number;
-  rolloverCost: number; // Percentage or fixed amount
-  status: 'ok' | 'attention' | 'critical';
+  closingDay?: number;
+  dueDay?: number;
+  aprMonthly?: number;
+  limit?: number;
+  balance?: number;
 }
 
 export interface AppState {
+  schemaVersion: number;
   transactions: Transaction[];
-  debts: Debt[]; // Acts as Cards list
-  categories: string[]; // Dynamic categories
+  cards: Card[];
+  categories: string[];
   monthlyIncome: number;
-  variableCap: number; // Teto de variáveis
+  variableCap: number;
+  installmentPlans: InstallmentPlan[];
 }
 
 export type View = 'dashboard' | 'add' | 'plan' | 'debts' | 'reports';
@@ -57,13 +84,23 @@ export type TransactionDraft = Partial<
   Pick<
     Transaction,
     | 'amount'
-    | 'person'
+    | 'personId'
     | 'description'
-    | 'type'
-    | 'category'
+    | 'kind'
+    | 'categoryId'
     | 'paymentMethod'
     | 'cardId'
     | 'status'
     | 'date'
+    | 'direction'
+    | 'competenceMonth'
   >
->;
+> & {
+  installment?: InstallmentInfo;
+};
+
+export const PERSON_LABEL: Record<PersonId, string> = {
+  alan: 'Alan',
+  kellen: 'Kellen',
+  casa: 'Casa',
+};

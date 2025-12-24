@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AppState, OperationType, Person, Transaction, TransactionDraft } from '../types';
+import { AppState, PersonId, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
 
 interface DashboardProps {
@@ -11,7 +11,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQuickAddDraft, isOnline }) => {
   const [monthOffset, setMonthOffset] = useState(0);
-  const [personFilter, setPersonFilter] = useState<Person | 'All'>('All');
+  const [personFilter, setPersonFilter] = useState<PersonId | 'All'>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [paymentFilter, setPaymentFilter] = useState<string>('All');
 
@@ -23,76 +23,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
 
   const currentMonth = targetDate.getMonth();
   const currentYear = targetDate.getFullYear();
+  const competence = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
   const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   const categoryOptions = useMemo(
-    () => ['All', ...Array.from(new Set(state.transactions.map((t) => t.category))).sort()],
+    () => ['All', ...Array.from(new Set(state.transactions.map((t) => t.categoryId || ''))).filter(Boolean).sort()],
     [state.transactions]
   );
 
   // 1. Filter Current Month Data
   const monthData = useMemo(() => {
     return state.transactions.filter(t => {
-      const d = new Date(t.date);
-      const matchesMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      const matchesPerson = personFilter === 'All' || t.person === personFilter;
-      const matchesCategory = categoryFilter === 'All' || t.category === categoryFilter;
+      const matchesMonth = (t.competenceMonth || '').startsWith(competence) || (new Date(t.date).getMonth() === currentMonth && new Date(t.date).getFullYear() === currentYear);
+      const matchesPerson = personFilter === 'All' || t.personId === personFilter;
+      const matchesCategory = categoryFilter === 'All' || t.categoryId === categoryFilter;
       const matchesPayment = paymentFilter === 'All' || t.paymentMethod === paymentFilter;
       return matchesMonth && matchesPerson && matchesCategory && matchesPayment;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [state.transactions, currentMonth, currentYear, personFilter, categoryFilter, paymentFilter]);
+  }, [state.transactions, currentMonth, currentYear, personFilter, categoryFilter, paymentFilter, competence]);
 
   // 2. Calculate Big Numbers (Forecast based)
   const totals = useMemo(() => {
-    // Income Logic: Recurring (Static) + Realized Extra (Receitas)
-    const realizedIncome = monthData
-        .filter(t => t.type === OperationType.RECEITA)
-        .reduce((acc, t) => acc + t.amount, 0);
+    const incomeExtra = monthData
+      .filter(t => t.kind === 'income')
+      .reduce((acc, t) => acc + t.amount, 0);
 
-    const totalIncome = state.monthlyIncome + realizedIncome;
+    const totalIncome = state.monthlyIncome + incomeExtra;
     
-    // Total Expenses (Life + Interest) - Planned + Paid
     const expensesLife = monthData
-      .filter(t => t.type === OperationType.VIDA)
+      .filter(t => t.kind === 'expense')
       .reduce((acc, t) => acc + t.amount, 0);
 
     const expensesBurn = monthData
-      .filter(t => t.type === OperationType.JUROS)
+      .filter(t => t.kind === 'fee_interest')
       .reduce((acc, t) => acc + t.amount, 0);
 
-    // Variable Spend Calculation (Mock logic based on Categories for now, ideally strictly typed)
-    // Assuming 'Alimentação', 'Lazer', 'Compras', 'Uber', 'Transporte' are variable for the Semaphore
-    const variableCategories = ['Alimentação', 'Lazer', 'Compras', 'Transporte', 'Restaurante'];
+    const variableCategories = ['Alimentação', 'Lazer', 'Compras', 'Transporte', 'Restaurante', 'Mercado'];
     const spentVariable = monthData
-      .filter(t => t.type === OperationType.VIDA && variableCategories.some(c => t.category.includes(c)))
+      .filter(t => t.kind === 'expense' && variableCategories.some(c => (t.categoryId || '').includes(c)))
       .reduce((acc, t) => acc + t.amount, 0);
 
-    // Safe Balance: Income - (Life + Burn)
     const safeBalance = totalIncome - (expensesLife + expensesBurn);
 
     return { totalIncome, expensesLife, expensesBurn, safeBalance, spentVariable };
   }, [monthData, state.monthlyIncome]);
 
-  // 3. Card Projections
+  // 3. Card Projections (credit charges only)
   const cardProjection = useMemo(() => {
-    const cardTx = monthData.filter(t => 
-      t.description.toLowerCase().includes('fatura') || 
-      t.category.toLowerCase().includes('cartão')
-    );
+    const cardTx = monthData.filter(t => t.paymentMethod === 'credit' && t.kind === 'expense');
     const totalEstimated = cardTx.reduce((acc, t) => acc + t.amount, 0);
     const paidSoFar = cardTx.filter(t => t.status === 'paid').reduce((acc, t) => acc + t.amount, 0);
     
     return { totalEstimated, paidSoFar };
   }, [monthData]);
 
-  const getStatusColor = (type: OperationType) => {
-    switch (type) {
-      case OperationType.RECEITA: return 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10';
-      case OperationType.VIDA: return 'text-blue-400 border-blue-400/30 bg-blue-400/10';
-      case OperationType.DIVIDA: return 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10';
-      case OperationType.JUROS: return 'text-rose-500 border-rose-500/30 bg-rose-500/10';
-      case OperationType.ROLAGEM: return 'text-zinc-400 border-zinc-500/30 bg-zinc-500/10';
-      case OperationType.INVESTIMENTO: return 'text-purple-400 border-purple-400/30 bg-purple-400/10';
+  const getStatusColor = (kind: Transaction['kind']) => {
+    switch (kind) {
+      case 'income': return 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10';
+      case 'expense': return 'text-blue-400 border-blue-400/30 bg-blue-400/10';
+      case 'debt_payment': return 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10';
+      case 'fee_interest': return 'text-rose-500 border-rose-500/30 bg-rose-500/10';
+      case 'transfer': return 'text-zinc-400 border-zinc-500/30 bg-zinc-500/10';
       default: return 'text-zinc-400';
     }
   };
@@ -138,13 +129,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
               </span>
             </div>
             <div className="flex gap-1">
-              {(['All', Person.ALAN, Person.KELLEN, Person.CASA] as const).map(p => (
+              {(['All', 'alan', 'kellen', 'casa'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setPersonFilter(p)}
                   className={`px-2 py-1 rounded-full text-[10px] font-bold border ${personFilter === p ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'}`}
                 >
-                  {p === 'All' ? 'Todos' : p}
+                  {p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
                 </button>
               ))}
             </div>
@@ -210,7 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
             onChange={(e) => setPaymentFilter(e.target.value)}
             className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-2 py-2"
           >
-            {['All', 'Credit', 'Pix', 'Debit', 'Cash'].map((p) => (
+            {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
               <option key={p} value={p}>{p === 'All' ? 'Todos pagamentos' : p}</option>
             ))}
           </select>
@@ -227,7 +218,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
             const { day, weekday } = formatDate(item.date);
             const isPaid = item.status === 'paid';
             const isPast = new Date(item.date) < new Date() && !isPaid;
-            const isIncome = item.type === OperationType.RECEITA;
+            const isIncome = item.kind === 'income';
             const isOffline = item.needsSync;
 
             return (
@@ -252,19 +243,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                           {item.description}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-1.5">
-                          <span className={`text-[9px] px-1.5 py-px rounded border ${getStatusColor(item.type)}`}>
-                            {item.type}
+                          <span className={`text-[9px] px-1.5 py-px rounded border ${getStatusColor(item.kind)}`}>
+                            {item.kind}
                           </span>
-                          <span className="text-[10px] text-zinc-600 truncate max-w-[100px] py-px">
-                            {item.category}
-                          </span>
+                          {item.categoryId && (
+                            <span className="text-[10px] text-zinc-600 truncate max-w-[100px] py-px">
+                              {item.categoryId}
+                            </span>
+                          )}
+                          {item.installment && (
+                            <span className="text-[10px] text-zinc-500">
+                              {item.installment.number}/{item.installment.total}
+                            </span>
+                          )}
                         </div>
                      </div>
                   </div>
 
                   {/* Right: Amount & Action */}
                   <div className="text-right flex flex-col items-end">
-                    <span className={`font-mono font-bold text-sm tracking-tight ${isIncome ? 'text-emerald-400' : item.type === OperationType.ROLAGEM ? 'text-zinc-500' : 'text-zinc-100'}`}>
+                    <span className={`font-mono font-bold text-sm tracking-tight ${isIncome ? 'text-emerald-400' : item.kind === 'transfer' ? 'text-zinc-500' : 'text-zinc-100'}`}>
                       {isIncome ? '+' : ''} {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                     {isOffline && <span className="text-[9px] text-amber-300">Pendente de sincronizar</span>}
@@ -286,14 +284,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                       <button
                         onClick={() => onQuickAddDraft({
                           amount: item.amount,
-                          description: item.description,
-                          category: item.category,
-                          type: item.type,
-                          paymentMethod: item.paymentMethod,
+                          description: `Pagamento ${item.description}`,
+                          kind: 'debt_payment',
+                          paymentMethod: 'pix',
                           cardId: item.cardId,
-                          person: item.person,
+                          personId: item.personId,
                           status: 'paid',
-                          date: new Date().toISOString()
+                          date: new Date().toISOString(),
+                          competenceMonth: competence,
                         })}
                         className="text-[10px] text-emerald-400 underline mt-2 hover:text-white"
                       >

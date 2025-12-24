@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, OperationType, PaymentMethod, Person, Transaction } from '../types';
+import { AppState, InstallmentPlan, PaymentMethod, PersonId, Transaction } from '../types';
 import { Icons } from './Icons';
-import { generateFinancialInsight } from '../services/geminiService';
+import { generateFinancialInsight } from '../services/aiClient';
 import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface ReportsProps {
@@ -9,14 +9,15 @@ interface ReportsProps {
   onGenerateNextMonth: () => void;
   onQuickAddDraft?: (draft: Partial<Transaction>) => void;
   onToast?: (message: string, type?: 'success' | 'error') => void;
+  onUpdateInstallments?: (plans: InstallmentPlan[], txs: Transaction[]) => void;
 }
 
 type TimeTab = 'past' | 'present' | 'future';
 
-export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, onQuickAddDraft, onToast }) => {
+export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, onQuickAddDraft, onToast, onUpdateInstallments }) => {
   const [activeTab, setActiveTab] = useState<TimeTab>('past');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0); // 0 = current, -1 = last month
-  const [personFilter, setPersonFilter] = useState<Person | 'All'>('All');
+  const [personFilter, setPersonFilter] = useState<PersonId | 'All'>('All');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | 'All'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'paid' | 'pending'>('All');
   const [insight, setInsight] = useState<string>('Conecte uma API Key para insights rápidos.');
@@ -40,9 +41,9 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   const filteredData = useMemo(() => {
     return state.transactions.filter(t => {
       const tDate = new Date(t.date);
-      const sameMonth = tDate.getMonth() === targetDate.getMonth() && 
-                        tDate.getFullYear() === targetDate.getFullYear();
-      const samePerson = personFilter === 'All' || t.person === personFilter;
+      const comp = t.competenceMonth || `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+      const sameMonth = comp === `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+      const samePerson = personFilter === 'All' || t.personId === personFilter;
       const samePayment = paymentFilter === 'All' || t.paymentMethod === paymentFilter;
       const sameStatus = statusFilter === 'All' || t.status === statusFilter;
       return sameMonth && samePerson && samePayment && sameStatus;
@@ -51,28 +52,26 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
   // Aggregations
   const stats = useMemo(() => {
-    const income = state.monthlyIncome; // Assuming fixed for simplicity in report
-    const lifeCost = filteredData.filter(t => t.type === OperationType.VIDA).reduce((acc, t) => acc + t.amount, 0);
-    const burn = filteredData.filter(t => t.type === OperationType.JUROS).reduce((acc, t) => acc + t.amount, 0);
-    const debtPrincipal = filteredData.filter(t => t.type === OperationType.DIVIDA).reduce((acc, t) => acc + t.amount, 0);
-    const rollover = filteredData.filter(t => t.type === OperationType.ROLAGEM).reduce((acc, t) => acc + t.amount, 0);
-    
-    // "Total Paid" includes everything that left the account
-    const totalPaid = lifeCost + burn + debtPrincipal + rollover;
-    
-    // "Real Cost" is Life + Burn (The actual economic cost)
+    const incomeExtra = filteredData.filter(t => t.kind === 'income').reduce((acc, t) => acc + t.amount, 0);
+    const lifeCost = filteredData.filter(t => t.kind === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const burn = filteredData.filter(t => t.kind === 'fee_interest').reduce((acc, t) => acc + t.amount, 0);
+    const debtPrincipal = filteredData.filter(t => t.kind === 'debt_payment').reduce((acc, t) => acc + t.amount, 0);
+    const transfer = filteredData.filter(t => t.kind === 'transfer').reduce((acc, t) => acc + t.amount, 0);
+    const income = state.monthlyIncome + incomeExtra;
+    const totalPaid = lifeCost + burn + debtPrincipal + transfer;
     const realCost = lifeCost + burn;
 
-    return { income, lifeCost, burn, debtPrincipal, rollover, totalPaid, realCost };
+    return { income, lifeCost, burn, debtPrincipal, transfer, totalPaid, realCost };
   }, [filteredData, state.monthlyIncome]);
 
   // Calculate Breakdown for Life Cost by Category
   const lifeCostCategories = useMemo(() => {
       const categories: Record<string, number> = {};
-      const lifeTransactions = filteredData.filter(t => t.type === OperationType.VIDA);
+      const lifeTransactions = filteredData.filter(t => t.kind === 'expense');
       
       lifeTransactions.forEach(t => {
-          categories[t.category] = (categories[t.category] || 0) + t.amount;
+          const key = t.categoryId || 'Outros';
+          categories[key] = (categories[key] || 0) + t.amount;
       });
 
       return Object.entries(categories)
@@ -90,12 +89,13 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
     const map: Record<string, { month: string; gasto: number; juros: number; order: number }> = {};
     state.transactions.forEach((t) => {
       const d = new Date(t.date);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const comp = t.competenceMonth || `${d.getFullYear()}-${d.getMonth() + 1}`;
+      const key = comp;
       if (!map[key]) {
         map[key] = { month: d.toLocaleDateString('pt-BR', { month: 'short' }), gasto: 0, juros: 0, order: d.getFullYear() * 12 + d.getMonth() };
       }
-      if (t.type === OperationType.JUROS) map[key].juros += t.amount;
-      if (t.type === OperationType.VIDA) map[key].gasto += t.amount;
+      if (t.kind === 'fee_interest') map[key].juros += t.amount;
+      if (t.kind === 'expense') map[key].gasto += t.amount;
     });
     return Object.values(map)
       .sort((a, b) => a.order - b.order)
@@ -106,8 +106,8 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
     filteredData.forEach(t => {
-      if (!groups[t.type]) groups[t.type] = [];
-      groups[t.type].push(t);
+      if (!groups[t.kind]) groups[t.kind] = [];
+      groups[t.kind].push(t);
     });
     return groups;
   }, [filteredData]);
@@ -119,10 +119,30 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e', '#8b5cf6', '#22d3ee', '#a855f7'];
 
+  const plansView = useMemo(() => {
+    return (state.installmentPlans || []).map((plan) => {
+      const related = state.transactions.filter((t) => t.installment?.groupId === plan.id);
+      const pending = related.filter((t) => t.status === 'pending').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return {
+        plan,
+        remaining: pending.length,
+        nextDate: pending[0]?.date,
+        totalGenerated: related.length,
+      };
+    });
+  }, [state.installmentPlans, state.transactions]);
+
+  const handleCancelPlan = (planId: string) => {
+    const updatedPlans = state.installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled' } : p));
+    const updatedTx = state.transactions.filter((t) => !(t.installment?.groupId === planId && t.status === 'pending'));
+    onUpdateInstallments?.(updatedPlans, updatedTx);
+    onToast?.('Parcelas futuras canceladas');
+  };
+
   const handleInsight = async () => {
     setLoadingInsight(true);
     try {
-      const text = await generateFinancialInsight(filteredData, state.monthlyIncome);
+      const text = await generateFinancialInsight({ transactions: filteredData, income: state.monthlyIncome });
       setInsight(text);
       onToast?.('Insight atualizado');
     } catch (error) {
@@ -134,16 +154,19 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   };
 
   const exportCSV = () => {
-    const header = 'data,descricao,valor,pessoa,tipo,categoria,status,pagamento';
+    const header = 'data,competence,descricao,valor,pessoa,kind,categoria,status,pagamento,cartao,parcelamento';
     const rows = filteredData.map(t => [
       new Date(t.date).toISOString(),
+      t.competenceMonth,
       `"${t.description}"`,
       t.amount,
-      t.person,
-      t.type,
-      t.category,
+      t.personId,
+      t.kind,
+      t.categoryId,
       t.status,
-      t.paymentMethod
+      t.paymentMethod,
+      t.cardId || '',
+      t.installment ? `${t.installment.number}/${t.installment.total}` : ''
     ].join(','));
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -208,7 +231,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         
         {/* === FILTER CHIPS === */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-           {(['All', Person.ALAN, Person.KELLEN, Person.CASA] as const).map(p => (
+           {(['All', 'alan', 'kellen', 'casa'] as const).map(p => (
              <button 
                 key={p}
                 onClick={() => setPersonFilter(p)}
@@ -218,7 +241,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                     : 'bg-zinc-900 text-zinc-500 border-zinc-800'
                 }`}
              >
-               {p === 'All' ? 'Todos' : p}
+               {p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
              </button>
            ))}
            <select
@@ -226,7 +249,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
              onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
              className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-full px-3 py-1"
            >
-             {['All', 'Credit', 'Pix', 'Debit', 'Cash'].map((p) => (
+             {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
                <option key={p} value={p}>{p === 'All' ? 'Qualquer pagamento' : p}</option>
              ))}
            </select>
@@ -320,6 +343,36 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
           <p className="text-sm text-zinc-300 leading-snug">{insight}</p>
         </div>
 
+        {/* Installment Plans */}
+        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs text-zinc-400 uppercase font-bold">Parcelamentos</h4>
+            <span className="text-[10px] text-zinc-500">{plansView.length} ativos</span>
+          </div>
+          {plansView.length === 0 && <p className="text-xs text-zinc-500">Nenhum parcelamento.</p>}
+          {plansView.map(({ plan, remaining, nextDate, totalGenerated }) => (
+            <div key={plan.id} className="border border-zinc-800 rounded-xl p-3 flex justify-between items-start">
+              <div>
+                <p className="text-sm text-white font-bold">{plan.description}</p>
+                <p className="text-[10px] text-zinc-500">
+                  {plan.totalInstallments}x de R$ {plan.perInstallmentAmount.toLocaleString()} · cartão {plan.cardId || '-'}
+                </p>
+                <p className="text-[10px] text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleCancelPlan(plan.id)}
+                  disabled={!onUpdateInstallments}
+                  className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  Cancelar futuras
+                </button>
+                <span className="text-[10px] text-zinc-500 self-center">{totalGenerated} lanç.</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* === BREAKDOWN VISUALIZATION === */}
         <div className="space-y-4">
            <h3 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Para onde foi o dinheiro</h3>
@@ -394,14 +447,14 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         <div className="space-y-6 pt-4">
           <h3 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Detalhamento</h3>
           
-          {[OperationType.JUROS, OperationType.VIDA, OperationType.DIVIDA, OperationType.ROLAGEM].map(type => {
+          {(['fee_interest', 'expense', 'debt_payment', 'transfer'] as Transaction['kind'][]).map(type => {
             const items = groupedByType[type] || [];
             if (items.length === 0) return null;
 
             return (
               <div key={type} className="bg-zinc-900/50 rounded-xl border border-zinc-800/50 overflow-hidden">
                 <div className={`px-4 py-2 text-xs font-bold flex justify-between ${
-                  type === OperationType.JUROS ? 'bg-rose-500/10 text-rose-400' : 'bg-zinc-800 text-zinc-400'
+                  type === 'fee_interest' ? 'bg-rose-500/10 text-rose-400' : 'bg-zinc-800 text-zinc-400'
                 }`}>
                   <span>{type}</span>
                   <span>R$ {items.reduce((a,b) => a + b.amount, 0).toLocaleString()}</span>
@@ -415,9 +468,9 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                         <div className="text-[10px] text-zinc-500 flex gap-2">
                            <span>{new Date(t.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}</span>
                            <span>•</span>
-                           <span>{t.category}</span>
+                           <span>{t.categoryId || '-'}</span>
                            <span>•</span>
-                           <span className="uppercase">{t.person}</span>
+                           <span className="uppercase">{t.personId || '-'}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -427,13 +480,15 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                           onClick={() => onQuickAddDraft?.({
                             amount: t.amount,
                             description: t.description,
-                            category: t.category,
-                            type: t.type,
+                            categoryId: t.categoryId,
+                            kind: t.kind,
                             paymentMethod: t.paymentMethod,
                             cardId: t.cardId,
-                            person: t.person,
+                            personId: t.personId,
                             status: 'paid',
-                            date: new Date().toISOString()
+                            date: new Date().toISOString(),
+                            direction: t.direction,
+                            competenceMonth: t.competenceMonth,
                           })}
                           title="Relançar/ajustar este item"
                         >

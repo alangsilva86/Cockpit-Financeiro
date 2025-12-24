@@ -1,94 +1,121 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Debt, OperationType, PaymentMethod, Person, Transaction, TransactionDraft } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Card, InstallmentPlan, PaymentMethod, PersonId, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
-import { suggestCategory, parseReceiptImage, INCOME_CATEGORIES } from '../services/geminiService';
+import { INCOME_CATEGORIES } from '../services/categories';
+import { parseReceiptImage, suggestCategory } from '../services/aiClient';
 
 interface QuickAddProps {
-  onAdd: (transactions: Transaction[], options?: { stayOnAdd?: boolean }) => void;
+  onAdd: (transactions: Transaction[], options?: { stayOnAdd?: boolean; newPlan?: InstallmentPlan | null }) => void;
   onCancel: () => void;
   availableCategories: string[];
-  availableCards: Debt[];
-  onAddCard: (card: Debt) => void;
+  availableCards: Card[];
+  onAddCard: (card: Card) => void;
   draft?: TransactionDraft | null;
   onClearDraft: () => void;
   isOnline: boolean;
   onToast: (message: string, type?: 'success' | 'error') => void;
 }
 
-export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCategories, availableCards, onAddCard, draft, onClearDraft, isOnline, onToast }) => {
+const PERSONS: PersonId[] = ['alan', 'kellen', 'casa'];
+const PAYMENT_METHODS: PaymentMethod[] = ['credit', 'pix', 'debit', 'cash'];
+
+const competenceFromDate = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const buildInstallments = (
+  totalAmount: number,
+  totalInstallments: number,
+  firstDate: string,
+  base: Omit<Transaction, 'id' | 'competenceMonth' | 'status' | 'installment'>
+): { transactions: Transaction[]; plan: InstallmentPlan } => {
+  const planId = `plan-${Date.now().toString(36)}`;
+  const per = Math.round((totalAmount / totalInstallments) * 100) / 100;
+  const transactions: Transaction[] = [];
+  const start = new Date(firstDate);
+
+  for (let i = 0; i < totalInstallments; i++) {
+    const d = new Date(start);
+    d.setMonth(d.getMonth() + i);
+    const isLast = i === totalInstallments - 1;
+    const provisionalAmount = per;
+    const accumulated = per * (totalInstallments - 1);
+    const lastAmount = Math.round((totalAmount - accumulated) * 100) / 100;
+    const amount = isLast ? lastAmount : provisionalAmount;
+    const iso = d.toISOString();
+    const status: Transaction['status'] = d <= new Date() ? 'paid' : 'pending';
+
+    transactions.push({
+      ...base,
+      id: `${planId}-${i + 1}`,
+      date: iso,
+      competenceMonth: competenceFromDate(iso),
+      status,
+      amount,
+      installment: {
+        groupId: planId,
+        number: i + 1,
+        total: totalInstallments,
+        originalTotalAmount: totalAmount,
+        perInstallmentAmount: amount,
+        startDate: firstDate,
+      },
+    });
+  }
+
+  const plan: InstallmentPlan = {
+    id: planId,
+    createdAt: new Date().toISOString(),
+    description: base.description,
+    personId: base.personId,
+    categoryId: base.categoryId || '',
+    cardId: base.cardId || '',
+    purchaseDate: base.date,
+    firstInstallmentDate: firstDate,
+    totalInstallments,
+    totalAmount,
+    perInstallmentAmount: per,
+    status: 'active',
+    remainingInstallments: totalInstallments,
+  };
+
+  return { transactions, plan };
+};
+
+export const QuickAdd: React.FC<QuickAddProps> = ({
+  onAdd,
+  onCancel,
+  availableCategories,
+  availableCards,
+  onAddCard,
+  draft,
+  onClearDraft,
+  isOnline,
+  onToast,
+}) => {
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<OperationType>(OperationType.VIDA);
-  const [person, setPerson] = useState<Person>(Person.ALAN);
-  
-  // Default to Today (YYYY-MM-DD)
+  const [kind, setKind] = useState<Transaction['kind']>('expense');
+  const [personId, setPersonId] = useState<PersonId>('alan');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
   const [category, setCategory] = useState<string>(''); 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Credit');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit');
   const [selectedCardId, setSelectedCardId] = useState<string>('');
-
   const [isRollover, setIsRollover] = useState(false);
   const [rolloverFee, setRolloverFee] = useState<string>('');
-  
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [isCreatingCard, setIsCreatingCard] = useState(false);
   const [newCardName, setNewCardName] = useState('');
   const [newCardDay, setNewCardDay] = useState('');
-
-  // UI State for Template Menu
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stayOnAdd, setStayOnAdd] = useState(false);
-
-  const resetForm = () => {
-    setAmount('');
-    setDescription('');
-    setCategory('');
-    setPaymentMethod('Credit');
-    setSelectedCardId(availableCards[0]?.id || '');
-    setIsRollover(false);
-    setRolloverFee('');
-    setStayOnAdd(false);
-    setError(null);
-    onClearDraft();
-  };
-
-  // --- Filter Categories based on Type ---
-  const displayedCategories = useMemo(() => {
-    if (type === OperationType.RECEITA) {
-        return INCOME_CATEGORIES;
-    }
-    return availableCategories.filter(cat => !INCOME_CATEGORIES.includes(cat));
-  }, [type, availableCategories]);
-
-  const progress = useMemo(() => {
-    const checkpoints = [
-      type,
-      amount,
-      description && category,
-      person,
-      paymentMethod || type === OperationType.RECEITA,
-    ];
-    return Math.round((checkpoints.filter(Boolean).length / 4) * 100);
-  }, [type, amount, description, category, person, paymentMethod]);
-
-  const isFutureDate = useMemo(() => new Date(date) > new Date(), [date]);
-
-  // --- Visual Context Logic ---
-  const getAmbientColor = () => {
-    switch (type) {
-        case OperationType.RECEITA: return 'from-emerald-900/40 to-zinc-950 border-emerald-900/30';
-        case OperationType.VIDA: return 'from-blue-900/20 to-zinc-950 border-blue-900/20';
-        case OperationType.JUROS: return 'from-rose-900/30 to-zinc-950 border-rose-900/30';
-        case OperationType.DIVIDA: return 'from-indigo-900/30 to-zinc-950 border-indigo-900/30';
-        case OperationType.ROLAGEM: return 'from-zinc-800 to-zinc-950 border-zinc-700';
-        default: return 'from-zinc-900/20 to-zinc-950 border-zinc-800';
-    }
-  };
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentsCount, setInstallmentsCount] = useState(1);
+  const [firstInstallmentDate, setFirstInstallmentDate] = useState(date);
 
   useEffect(() => {
     if (availableCards.length > 0 && !selectedCardId) {
@@ -124,45 +151,71 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
     if (!draft) return;
     if (draft.amount !== undefined) setAmount(draft.amount.toString());
     if (draft.description) setDescription(draft.description);
-    if (draft.type) setType(draft.type);
-    if (draft.category) setCategory(draft.category);
+    if (draft.kind) setKind(draft.kind);
+    if (draft.categoryId) setCategory(draft.categoryId);
     if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
     if (draft.cardId) setSelectedCardId(draft.cardId);
-    if (draft.person) setPerson(draft.person);
+    if (draft.personId) setPersonId(draft.personId);
     if (draft.date) setDate(draft.date.split('T')[0]);
   }, [draft]);
 
-  const handleTypeChange = (t: OperationType) => {
-    setType(t);
-    setIsRollover(t === OperationType.ROLAGEM);
-    
-    if (t === OperationType.RECEITA) {
-        setCategory('Salário');
-        setPaymentMethod('Pix'); 
-    } else if (t === OperationType.DIVIDA) {
-        setCategory('Dívida');
-    } else if (t === OperationType.INVESTIMENTO) {
-        setCategory('Investimento');
-    } else if (t === OperationType.JUROS) {
-        setCategory('Taxas');
+  const displayedCategories = useMemo(() => {
+    if (kind === 'income') return INCOME_CATEGORIES;
+    return availableCategories.filter(cat => !INCOME_CATEGORIES.includes(cat));
+  }, [kind, availableCategories]);
+
+  const progress = useMemo(() => {
+    const checkpoints = [
+      kind,
+      amount,
+      description && category,
+      personId,
+      paymentMethod,
+    ];
+    return Math.round((checkpoints.filter(Boolean).length / 4) * 100);
+  }, [kind, amount, description, category, personId, paymentMethod]);
+
+  const isFutureDate = useMemo(() => new Date(date) > new Date(), [date]);
+
+  const resetForm = () => {
+    setAmount('');
+    setDescription('');
+    setCategory('');
+    setPaymentMethod('credit');
+    setSelectedCardId(availableCards[0]?.id || '');
+    setIsRollover(false);
+    setRolloverFee('');
+    setStayOnAdd(false);
+    setError(null);
+    setIsInstallment(false);
+    setInstallmentsCount(1);
+    setFirstInstallmentDate(new Date().toISOString().split('T')[0]);
+    onClearDraft();
+  };
+
+  const handleTypeChange = (next: Transaction['kind']) => {
+    setKind(next);
+    if (next === 'income') {
+      setCategory('Salário');
+      setPaymentMethod('pix');
+      setIsInstallment(false);
     } else {
-        if (INCOME_CATEGORIES.includes(category)) setCategory('');
-        setPaymentMethod('Credit');
+      if (INCOME_CATEGORIES.includes(category)) setCategory('');
+      if (paymentMethod !== 'credit') setIsInstallment(false);
     }
+    setIsRollover(next === 'fee_interest');
   };
 
   const handleTemplate = (mode: 'fatura' | 'pix') => {
-    setType(OperationType.ROLAGEM);
-    setIsRollover(true);
-    
+    handleTypeChange('debt_payment');
     if (mode === 'fatura') {
-      setDescription('Pagamento Fatura Cruzado');
-      setCategory('Dívida'); 
-      setPaymentMethod('Pix'); 
+      setDescription('Pagamento Fatura Cartão');
+      setCategory('Taxas'); 
+      setPaymentMethod('pix'); 
     } else {
-      setDescription('Saque/PIX no Crédito');
-      setCategory('Dívida');
-      setPaymentMethod('Credit');
+      setDescription('Transferência/PIX');
+      setCategory('Outros');
+      setPaymentMethod('pix');
     }
     setShowTemplateMenu(false);
   };
@@ -172,15 +225,10 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
     if (!newCardName) return;
 
     const newId = Date.now().toString();
-    const newCard: Debt = {
-        id: newId,
-        name: newCardName,
-        dueDate: newCardDay || '01',
-        balance: 0,
-        minPayment: 0,
-        rolloverCost: 10,
-        status: 'ok',
-        currentInvoice: 0
+    const newCard: Card = {
+      id: newId,
+      name: newCardName,
+      dueDay: newCardDay ? parseInt(newCardDay, 10) : undefined,
     };
 
     onAddCard(newCard);
@@ -226,61 +274,71 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!amount || !description || !category) {
+
+    if (!amount || !description || (!category && kind !== 'debt_payment' && kind !== 'transfer')) {
       setError('Preencha valor, descrição e categoria.');
       onToast('Preencha os campos obrigatórios.', 'error');
       return;
     }
-    if (paymentMethod === 'Credit' && !selectedCardId && type !== OperationType.RECEITA) {
-        setError('Selecione um cartão de crédito.');
-        onToast('Selecione um cartão de crédito.', 'error');
-        return;
+    if (paymentMethod === 'credit' && !selectedCardId) {
+      setError('Selecione um cartão de crédito.');
+      onToast('Selecione um cartão de crédito.', 'error');
+      return;
     }
 
-    const newTransactions: Transaction[] = [];
-    
-    // Construct Date object based on input
+    const totalAmount = parseFloat(amount);
     const finalDate = new Date(date);
-    // Preserve current time to avoid timezone shifts affecting the date display later, 
-    // unless user picks a past date, then time is less relevant but we keep it clean.
     const now = new Date();
     finalDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
     const isoDate = finalDate.toISOString();
-    
-    const baseId = Date.now().toString();
-    const computedStatus = isFutureDate ? 'pending' : 'paid';
+    const computedStatus: Transaction['status'] = isFutureDate ? 'pending' : 'paid';
 
-    newTransactions.push({
-      id: baseId,
+    const base: Omit<Transaction, 'id' | 'installment' | 'status'> = {
       date: isoDate,
-      amount: parseFloat(amount),
-      person,
+      competenceMonth: competenceFromDate(isoDate),
+      direction: kind === 'income' ? 'in' : 'out',
+      kind,
+      amount: totalAmount,
       description,
-      type: isRollover ? OperationType.ROLAGEM : type,
-      category,
+      personId,
+      categoryId: category,
       paymentMethod,
-      cardId: paymentMethod === 'Credit' ? selectedCardId : undefined,
-      status: computedStatus,
-      needsSync: !isOnline
-    });
+      cardId: paymentMethod === 'credit' ? selectedCardId : undefined,
+      tags: [],
+      needsSync: !isOnline,
+      isRecurring: false,
+    };
 
-    if (isRollover && rolloverFee) {
-      newTransactions.push({
-        id: `${baseId}_fee`,
-        date: isoDate,
-        amount: parseFloat(rolloverFee),
-        person,
-        description: `Juros/Taxa: ${description}`,
-        type: OperationType.JUROS,
-        category: 'Taxas',
-        paymentMethod: paymentMethod,
-        cardId: paymentMethod === 'Credit' ? selectedCardId : undefined,
+    const transactions: Transaction[] = [];
+    let newPlan: InstallmentPlan | null = null;
+
+    if (paymentMethod === 'credit' && isInstallment && installmentsCount > 1 && kind === 'expense') {
+      const { transactions: txs, plan } = buildInstallments(totalAmount, installmentsCount, firstInstallmentDate, {
+        ...base,
+        kind: 'expense',
+      });
+      newPlan = plan;
+      transactions.push(...txs.map((t) => ({ ...t, status: t.status || computedStatus })));
+    } else {
+      transactions.push({
+        ...base,
+        id: Date.now().toString(),
         status: computedStatus,
-        needsSync: !isOnline
       });
     }
 
-    onAdd(newTransactions, { stayOnAdd });
+    if (isRollover && rolloverFee) {
+      transactions.push({
+        ...base,
+        id: `${Date.now()}-fee`,
+        description: `Juros/Taxa: ${description}`,
+        kind: 'fee_interest',
+        amount: parseFloat(rolloverFee),
+        status: computedStatus,
+      });
+    }
+
+    onAdd(transactions, { stayOnAdd, newPlan });
     onToast(isOnline ? 'Lançamento salvo' : 'Guardado offline para sincronizar');
     if (stayOnAdd) {
       resetForm();
@@ -288,7 +346,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
   };
 
   return (
-    <div className={`p-4 h-full flex flex-col animate-in slide-in-from-bottom duration-300 relative bg-gradient-to-b ${getAmbientColor()}`}>
+    <div className={`p-4 h-full flex flex-col animate-in slide-in-from-bottom duration-300 relative bg-gradient-to-b from-zinc-900/20 to-zinc-950`}>
       
       <input 
         type="file" 
@@ -363,7 +421,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
                             className="w-full p-3 rounded-lg flex items-center gap-3 hover:bg-zinc-800 transition-all text-left"
                         >
                             <Icons.Burn size={16} className="text-rose-400" />
-                            <div className="text-sm font-bold text-zinc-200">Pix Crédito</div>
+                            <div className="text-sm font-bold text-zinc-200">Pix / Transferência</div>
                         </button>
                     </div>
                 )}
@@ -403,7 +461,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
           </span>
         </div>
       </div>
-      
+
       {error && (
         <div className="text-xs text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-3">
           {error}
@@ -413,23 +471,24 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
       {/* === STEP 1: OPERATION TYPE (NAVIGATION) === */}
       <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
           <div className="flex gap-2">
-            {[OperationType.VIDA, OperationType.RECEITA, OperationType.DIVIDA, OperationType.JUROS, OperationType.INVESTIMENTO, OperationType.ROLAGEM].map((t) => (
+            {([
+              { key: 'expense', label: 'Gasto' },
+              { key: 'income', label: 'Receita' },
+              { key: 'debt_payment', label: 'Pagamento Dívida' },
+              { key: 'fee_interest', label: 'Juros/Taxa' },
+              { key: 'transfer', label: 'Transferência' },
+            ] as const).map((t) => (
               <button
-                key={t}
+                key={t.key}
                 type="button"
-                onClick={() => handleTypeChange(t)}
+                onClick={() => handleTypeChange(t.key)}
                 className={`px-4 py-2 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${
-                  type === t
-                    ? t === OperationType.RECEITA ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-900/50 scale-105'
-                    : t === OperationType.VIDA ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/50 scale-105'
-                    : t === OperationType.ROLAGEM ? 'bg-zinc-600 border-zinc-500 text-white'
-                    : t === OperationType.DIVIDA ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : t === OperationType.JUROS ? 'bg-rose-600 border-rose-500 text-white'
-                    : 'bg-purple-600 border-purple-600 text-white'
+                  kind === t.key
+                    ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-900/50 scale-105'
                     : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
                 }`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
           </div>
@@ -447,7 +506,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className={`bg-transparent text-7xl font-bold focus:outline-none tracking-tighter w-full text-center placeholder-zinc-800 ${
-                    type === OperationType.RECEITA ? 'text-emerald-400' : 'text-white'
+                    kind === 'income' ? 'text-emerald-400' : 'text-white'
                 }`}
                 placeholder="0"
             />
@@ -460,18 +519,18 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
             {/* Row 1: Who & Date */}
             <div className="flex gap-3">
                 <div className="flex-1 bg-zinc-900/80 p-1 rounded-xl flex border border-zinc-800">
-                    {Object.values(Person).map((p) => (
+                    {PERSONS.map((p) => (
                     <button
                         key={p}
                         type="button"
-                        onClick={() => setPerson(p)}
+                        onClick={() => setPersonId(p)}
                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                        person === p 
+                        personId === p 
                             ? 'bg-zinc-200 text-zinc-900 shadow-sm' 
                             : 'text-zinc-500 hover:text-zinc-300'
                         }`}
                     >
-                        {p}
+                        {p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
                     </button>
                     ))}
                 </div>
@@ -481,73 +540,65 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
                     <input 
                     type="date"
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
+                    onChange={(e) => { setDate(e.target.value); setFirstInstallmentDate(e.target.value); }}
                     className="bg-transparent text-white text-xs font-bold focus:outline-none appearance-none [&::-webkit-calendar-picker-indicator]:invert"
                     />
                 </div>
             </div>
 
-            {/* Row 2: Payment Method (Hidden for Revenue) */}
-            {type !== OperationType.RECEITA && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-2 block">Como pagou?</label>
-                <div className="bg-zinc-900/80 p-1 rounded-xl flex border border-zinc-800">
+            {/* Row 2: Payment Method */}
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-2 block">Como pagou?</label>
+              <div className="bg-zinc-900/80 p-1 rounded-xl flex border border-zinc-800">
+                  {PAYMENT_METHODS.map((pm) => (
                     <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Credit')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                            paymentMethod === 'Credit' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500'
-                        }`}
+                      key={pm}
+                      type="button"
+                      onClick={() => { setPaymentMethod(pm); if (pm !== 'credit') setIsInstallment(false); }}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                          paymentMethod === pm ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500'
+                      }`}
                     >
-                        Crédito
+                      {pm === 'credit' ? 'Crédito' : pm === 'pix' ? 'Pix' : pm === 'debit' ? 'Débito' : 'Dinheiro'}
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Pix')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                            paymentMethod === 'Pix' || paymentMethod === 'Debit' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500'
-                        }`}
-                    >
-                        À Vista / Pix
-                    </button>
-                </div>
-                
-                {/* Card Selector */}
-                {paymentMethod === 'Credit' && (
-                    <div className="mt-2 overflow-x-auto pb-2 scrollbar-hide">
-                        <div className="flex gap-2">
-                            {availableCards.map(card => (
-                                <button
-                                key={card.id}
-                                type="button"
-                                onClick={() => setSelectedCardId(card.id)}
-                                className={`min-w-[120px] p-3 rounded-xl border text-left transition-all ${
-                                    selectedCardId === card.id 
-                                    ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/50' 
-                                    : 'bg-zinc-900/80 border-zinc-800 opacity-60'
-                                }`}
-                                >
-                                    <span className={`block text-xs font-bold ${selectedCardId === card.id ? 'text-white' : 'text-zinc-400'}`}>
-                                        {card.name}
-                                    </span>
-                                    <span className={`text-[10px] ${selectedCardId === card.id ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                                        Venc. {card.dueDate}
-                                    </span>
-                                </button>
-                            ))}
-                            <button
-                                type="button"
-                                onClick={() => setIsCreatingCard(true)}
-                                className="min-w-[40px] px-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-                            >
-                                <Icons.Add size={18} />
-                                <span className="text-[10px] font-bold ml-1">Cartão</span>
-                            </button>
-                        </div>
-                    </div>
-                )}
-                </div>
-            )}
+                  ))}
+              </div>
+              
+              {/* Card Selector */}
+              {paymentMethod === 'credit' && (
+                  <div className="mt-2 overflow-x-auto pb-2 scrollbar-hide">
+                      <div className="flex gap-2">
+                          {availableCards.map(card => (
+                              <button
+                              key={card.id}
+                              type="button"
+                              onClick={() => setSelectedCardId(card.id)}
+                              className={`min-w-[120px] p-3 rounded-xl border text-left transition-all ${
+                                  selectedCardId === card.id 
+                                  ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/50' 
+                                  : 'bg-zinc-900/80 border-zinc-800 opacity-60'
+                              }`}
+                              >
+                                  <span className={`block text-xs font-bold ${selectedCardId === card.id ? 'text-white' : 'text-zinc-400'}`}>
+                                      {card.name}
+                                  </span>
+                                  <span className={`text-[10px] ${selectedCardId === card.id ? 'text-indigo-200' : 'text-zinc-500'}`}>
+                                      Venc. {card.dueDay ?? '--'}
+                                  </span>
+                              </button>
+                          ))}
+                          <button
+                              type="button"
+                              onClick={() => setIsCreatingCard(true)}
+                              className="min-w-[40px] px-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                          >
+                              <Icons.Add size={18} />
+                              <span className="text-[10px] font-bold ml-1">Cartão</span>
+                          </button>
+                      </div>
+                  </div>
+              )}
+            </div>
 
             {/* Row 3: Description & Category */}
             <div>
@@ -556,31 +607,75 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     className="w-full bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 text-white focus:border-emerald-500 focus:outline-none mb-2"
-                    placeholder={type === OperationType.RECEITA ? "Descrição (ex: Salário)" : "Descrição (ex: Uber, Jantar...)"}
+                    placeholder={kind === 'income' ? "Descrição (ex: Salário)" : "Descrição (ex: Uber, Jantar...)"}
                 />
-                <div className="relative">
-                    <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 text-zinc-300 appearance-none focus:border-emerald-500 focus:outline-none"
-                    >
-                    <option value="" disabled>Selecione Categoria...</option>
-                    {displayedCategories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-zinc-500">
-                      {isSuggesting ? <span className="text-[10px] text-emerald-400 animate-pulse font-bold mr-4">IA...</span> : <Icons.ChevronRight className="rotate-90" size={16} />}
-                    </div>
-                </div>
+                {kind !== 'debt_payment' && kind !== 'transfer' && (
+                  <div className="relative">
+                      <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 text-zinc-300 appearance-none focus:border-emerald-500 focus:outline-none"
+                      >
+                      <option value="" disabled>Selecione Categoria...</option>
+                      {displayedCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-zinc-500">
+                        {isSuggesting ? <span className="text-[10px] text-emerald-400 animate-pulse font-bold mr-4">IA...</span> : <Icons.ChevronRight className="rotate-90" size={16} />}
+                      </div>
+                  </div>
+                )}
             </div>
+
+            {/* Parcelamento */}
+            {paymentMethod === 'credit' && kind === 'expense' && (
+              <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-800">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={isInstallment} onChange={(e) => setIsInstallment(e.target.checked)} className="accent-emerald-500" />
+                    <span className="text-sm text-white font-bold">Compra parcelada?</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500">Gera parcelas futuras automaticamente</span>
+                </div>
+                {isInstallment && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 uppercase font-bold">Parcelas (1-36)</label>
+                      <input 
+                        type="number"
+                        min={1}
+                        max={36}
+                        value={installmentsCount}
+                        onChange={(e) => setInstallmentsCount(Math.min(36, Math.max(1, parseInt(e.target.value || '1', 10))))}
+                        className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 uppercase font-bold">1ª Parcela</label>
+                      <input 
+                        type="date"
+                        value={firstInstallmentDate}
+                        onChange={(e) => setFirstInstallmentDate(e.target.value)}
+                        className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2 text-[10px] text-zinc-400">
+                      {installmentsCount > 1
+                        ? `Serão geradas ${installmentsCount} parcelas entre ${firstInstallmentDate} e mês ${installmentsCount} a frente.`
+                        : 'Entrada única (sem parcelamento).'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Rollover Logic Panel */}
             {isRollover && (
                 <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-700 animate-in fade-in zoom-in-95">
                     <div className="flex items-center gap-2 mb-3 text-amber-400">
                     <Icons.Alert size={16} />
-                    <span className="text-sm font-bold">Custo da Rolagem</span>
+                    <span className="text-sm font-bold">Custo de Rolagem</span>
                     </div>
                     <div>
                         <label className="text-xs text-zinc-400">Quanto foi a taxa/juros? (R$)</label>
@@ -616,14 +711,14 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
           </button>
           <button 
             type="submit" 
-            disabled={!amount || !category}
+            disabled={!amount}
             className={`flex-1 py-4 rounded-2xl font-bold text-lg text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xl transition-all active:scale-95 ${
-                 type === OperationType.RECEITA 
+                 kind === 'income' 
                     ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30' 
                     : 'bg-white text-black hover:bg-zinc-200 shadow-white/10'
             }`}
           >
-            {type === OperationType.RECEITA ? 'Receber' : 'Gastar'}
+            {kind === 'income' ? 'Receber' : 'Lançar'}
           </button>
         </div>
 

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from './Icons';
+import { Card, Transaction } from '../types';
 
 interface PlanningProps {
   onGenerateNextMonth: () => void;
@@ -9,13 +10,33 @@ interface PlanningProps {
   onAddCategory: (cat: string) => void;
   onBudgetChange: (payload: { monthlyIncome?: number; variableCap?: number }) => void;
   lastGeneration?: string | null;
+  transactions: Transaction[];
+  cards: Card[];
 }
 
-export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap, monthlyIncome, categories, onAddCategory, onBudgetChange, lastGeneration }) => {
+export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap, monthlyIncome, categories, onAddCategory, onBudgetChange, lastGeneration, transactions, cards }) => {
   const [newCat, setNewCat] = useState('');
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [localIncome, setLocalIncome] = useState(monthlyIncome);
   const [localVariableCap, setLocalVariableCap] = useState(variableCap);
+  const nextMonthDate = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d;
+  }, []);
+
+  const competenceFromDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const nextCompetence = competenceFromDate(nextMonthDate);
+
+  const nextMonthForecast = useMemo(() => {
+    const expenses = transactions.filter((t) => (t.competenceMonth || competenceFromDate(new Date(t.date))) === nextCompetence && t.kind === 'expense');
+    const creditByCard = cards.map((card) => {
+      const cardTx = expenses.filter((t) => t.paymentMethod === 'credit' && t.cardId === card.id);
+      return { card, total: cardTx.reduce((acc, t) => acc + t.amount, 0) };
+    });
+    const variableSpend = expenses.reduce((acc, t) => acc + t.amount, 0);
+    return { creditByCard, variableSpend };
+  }, [transactions, cards, nextCompetence]);
 
   const handleAddCat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +87,25 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
         {lastGeneration && (
           <p className="text-[10px] text-blue-200 mt-2">{lastGeneration}</p>
         )}
+      </div>
+
+      {/* Next month forecast */}
+      <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider">Previsão {nextCompetence}</h3>
+          <span className="text-[10px] text-zinc-500">Cartão + variáveis</span>
+        </div>
+        <div className="space-y-2">
+          {nextMonthForecast.creditByCard.map(({ card, total }) => (
+            <div key={card.id} className="flex justify-between text-sm bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+              <span className="text-zinc-300">{card.name}</span>
+              <span className="font-mono text-zinc-100">R$ {total.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+        <div className="text-[10px] text-zinc-500">
+          Variáveis previstas: R$ {nextMonthForecast.variableSpend.toLocaleString()}
+        </div>
       </div>
 
       {/* Caps */}

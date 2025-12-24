@@ -1,166 +1,209 @@
 import React, { useMemo, useState } from 'react';
-import { Debt, OperationType, Person, TransactionDraft } from '../types';
+import { Card, InstallmentPlan, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
 
 interface PassivosProps {
-  debts: Debt[];
-  onAddDebt?: (debt: Debt) => void;
-  onUpdateDebt?: (debt: Debt) => void;
+  cards: Card[];
+  transactions: Transaction[];
+  installmentPlans: InstallmentPlan[];
+  onAddCard?: (card: Card) => void;
+  onUpdateCard?: (card: Card) => void;
+  onUpdateInstallments: (plans: InstallmentPlan[], txs: Transaction[]) => void;
   onQuickAddDraft?: (draft: TransactionDraft) => void;
 }
 
-export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDebt, onQuickAddDraft }) => {
-  const [showSim, setShowSim] = useState(false);
-  const [liquidity, setLiquidity] = useState(300000);
-  
+const competenceString = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+export const Passivos: React.FC<PassivosProps> = ({
+  cards,
+  transactions,
+  installmentPlans,
+  onAddCard,
+  onUpdateCard,
+  onUpdateInstallments,
+  onQuickAddDraft,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  // Form State
   const [formName, setFormName] = useState('');
-  const [formBalance, setFormBalance] = useState('');
-  const [formDueDate, setFormDueDate] = useState('');
-  const [formMin, setFormMin] = useState('');
+  const [formClosing, setFormClosing] = useState('');
+  const [formDue, setFormDue] = useState('');
+  const [formApr, setFormApr] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(competenceString(new Date()));
 
-  const totalDebt = debts.reduce((acc, d) => acc + d.balance, 0);
-
-  const startEdit = (debt?: Debt) => {
+  const startEdit = (card?: Card) => {
     setIsEditing(true);
-    if (debt) {
-      setEditingId(debt.id);
-      setFormName(debt.name);
-      setFormBalance(debt.balance.toString());
-      setFormDueDate(debt.dueDate);
-      setFormMin(debt.minPayment.toString());
+    if (card) {
+      setEditingId(card.id);
+      setFormName(card.name);
+      setFormClosing(card.closingDay?.toString() || '');
+      setFormDue(card.dueDay?.toString() || '');
+      setFormApr(card.aprMonthly?.toString() || '');
     } else {
       setEditingId(null);
       setFormName('');
-      setFormBalance('');
-      setFormDueDate('');
-      setFormMin('');
+      setFormClosing('');
+      setFormDue('');
+      setFormApr('');
     }
   };
 
-  const saveDebt = () => {
-    if (!formName || !formBalance) return;
-    
-    const newDebt: Debt = {
+  const saveCard = () => {
+    if (!formName) return;
+    const card: Card = {
       id: editingId || Date.now().toString(),
       name: formName,
-      balance: parseFloat(formBalance),
-      dueDate: formDueDate || '01',
-      minPayment: parseFloat(formMin) || 0,
-      currentInvoice: parseFloat(formBalance) / 2, // Mock logic for new cards
-      rolloverCost: 12, // Default
-      status: 'ok'
+      closingDay: formClosing ? parseInt(formClosing, 10) : undefined,
+      dueDay: formDue ? parseInt(formDue, 10) : undefined,
+      aprMonthly: formApr ? parseFloat(formApr) : undefined,
     };
-
-    if (editingId && onUpdateDebt) {
-      onUpdateDebt(newDebt);
-    } else if (onAddDebt) {
-      onAddDebt(newDebt);
-    }
+    if (editingId && onUpdateCard) onUpdateCard(card);
+    if (!editingId && onAddCard) onAddCard(card);
     setIsEditing(false);
   };
 
-  // Helper for Interest Heatmap
-  const getHeatColor = (cost: number) => {
-      if (cost > 12) return 'bg-rose-600';
-      if (cost > 8) return 'bg-amber-500';
-      return 'bg-blue-500';
-  };
-
-  const orderedDebts = useMemo(() => {
-    return [...debts].sort((a, b) => {
-      const dueDiff = parseInt(a.dueDate) - parseInt(b.dueDate);
-      if (dueDiff !== 0) return dueDiff;
-      return b.rolloverCost - a.rolloverCost;
+  const monthCards = useMemo(() => {
+    return cards.map((card) => {
+      const charges = transactions.filter(
+        (t) => t.paymentMethod === 'credit' && t.cardId === card.id && (t.competenceMonth || competenceString(new Date(t.date))) === selectedMonth
+      );
+      const payments = transactions.filter(
+        (t) => t.kind === 'debt_payment' && t.cardId === card.id && (t.competenceMonth || competenceString(new Date(t.date))) === selectedMonth
+      );
+      const totalCharges = charges.reduce((acc, t) => acc + t.amount, 0);
+      const totalPayments = payments.reduce((acc, t) => acc + t.amount, 0);
+      const remaining = totalCharges - totalPayments;
+      const relatedPlans = installmentPlans.filter((p) => p.cardId === card.id && p.status === 'active');
+      return { card, totalCharges, totalPayments, remaining, charges, payments, relatedPlans };
     });
-  }, [debts]);
+  }, [cards, transactions, installmentPlans, selectedMonth]);
 
-  const avalanchePlan = useMemo(() => {
-    return [...debts].sort((a, b) => b.rolloverCost - a.rolloverCost).map(d => d.name);
-  }, [debts]);
-
-  const daysToDue = (dueDate: string) => {
-    const now = new Date();
-    const target = new Date();
-    target.setHours(0, 0, 0, 0);
-    target.setDate(parseInt(dueDate));
-    if (target < now) target.setMonth(target.getMonth() + 1);
-    return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const handleCancelPlan = (planId: string) => {
+    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled' } : p));
+    const updatedTx = transactions.filter((t) => !(t.installment?.groupId === planId && t.status === 'pending'));
+    onUpdateInstallments(updatedPlans, updatedTx);
   };
 
   return (
     <div className="p-4 space-y-6 animate-in slide-in-from-right duration-300 pb-24">
-      
-      {/* Simulation Banner */}
-      <div 
-        onClick={() => setShowSim(!showSim)}
-        className="bg-gradient-to-r from-indigo-900 to-indigo-800 p-4 rounded-xl shadow-lg shadow-indigo-900/20 cursor-pointer transform transition-transform active:scale-95 border border-indigo-700/50"
-      >
-        <div className="flex justify-between items-center text-white mb-1">
-          <h3 className="font-bold flex items-center gap-2"><Icons.Plan size={18} /> Simulador Parciom</h3>
-          <span className="text-[10px] bg-indigo-500/30 px-2 py-0.5 rounded text-indigo-200 border border-indigo-400/20">BETA</span>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2"><Icons.Debts size={18}/> Passivos</h3>
+          <p className="text-[10px] text-zinc-500">Cartão é meio de pagamento; fatura calculada pelo uso.</p>
         </div>
-        <p className="text-xs text-indigo-200 opacity-80">Toque para simular evento de liquidez.</p>
-      </div>
-
-      {showSim && (
-        <div className="bg-zinc-900 border border-indigo-500/30 p-4 rounded-xl space-y-4">
-          <h4 className="text-sm font-bold text-white">Cenário: Entrada de R$ {liquidity.toLocaleString()}</h4>
-          
-          <div className="space-y-3">
-             <div className="flex justify-between text-sm">
-               <span className="text-zinc-400">1. Quitar Dívidas</span>
-               <span className="text-rose-400 font-mono">- R$ {totalDebt.toLocaleString()}</span>
-             </div>
-             <div className="flex justify-between text-sm">
-               <span className="text-zinc-400">2. Reserva (6 meses)</span>
-               <span className="text-blue-400 font-mono">- R$ 60.000</span>
-             </div>
-             <div className="h-px bg-zinc-800 my-2"></div>
-             <div className="flex justify-between text-sm font-bold">
-               <span className="text-white">Sobra para Investir</span>
-               <span className="text-emerald-400 font-mono">R$ {(liquidity - totalDebt - 60000).toLocaleString()}</span>
-             </div>
-          </div>
-          <button className="w-full bg-indigo-600 py-2 rounded-lg text-sm font-bold text-white mt-2 hover:bg-indigo-500">
-            Gerar Plano de Execução
+        <div className="flex gap-2 items-center">
+          <input 
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white px-3 py-2"
+          />
+          <button 
+            onClick={() => startEdit()}
+            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-xl flex items-center gap-1 transition-colors border border-zinc-700"
+          >
+            <Icons.Add size={14} /> Novo cartão
           </button>
         </div>
-      )}
-
-      {/* Sniper Strategy Header */}
-      <div className="flex items-center justify-between">
-         <div>
-            <h3 className="text-sm font-bold text-zinc-100 flex gap-2 items-center">
-                <Icons.Target size={18} className="text-rose-500" /> Sniper de Dívidas
-            </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">
-                Ataque a barra <span className="text-rose-500 font-bold">vermelha</span> primeiro.
-            </p>
-         </div>
-         <button 
-          onClick={() => startEdit()}
-          className="text-xs bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-xl flex items-center gap-1 transition-colors border border-zinc-700"
-        >
-          <Icons.Add size={14} /> Novo
-        </button>
       </div>
 
-      {/* Avalanche suggestion */}
-      <div className="bg-zinc-900 p-3 rounded-xl border border-zinc-800">
-        <div className="text-[10px] text-zinc-500 uppercase font-bold mb-2">Ordem sugerida (avalanche)</div>
-        <div className="flex flex-wrap gap-2">
-          {avalanchePlan.map((name, idx) => (
-            <span key={name} className="px-3 py-1 rounded-full text-[10px] border border-zinc-800 bg-zinc-800/50 text-zinc-300">
-              {idx + 1}. {name}
-            </span>
-          ))}
-          {avalanchePlan.length === 0 && <span className="text-xs text-zinc-500">Sem dívidas cadastradas.</span>}
+      {monthCards.map(({ card, totalCharges, totalPayments, remaining, charges, payments, relatedPlans }) => (
+        <div key={card.id} className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-3">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-white font-bold text-lg">{card.name}</p>
+              <p className="text-[10px] text-zinc-500">Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}</p>
+            </div>
+            <button onClick={() => startEdit(card)} className="text-zinc-500 hover:text-white"><Icons.Edit size={16}/></button>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+              <p className="text-[10px] text-zinc-500 uppercase">Fatura</p>
+              <p className="text-white font-mono font-bold">R$ {totalCharges.toLocaleString()}</p>
+            </div>
+            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+              <p className="text-[10px] text-zinc-500 uppercase">Pago</p>
+              <p className="text-emerald-400 font-mono font-bold">R$ {totalPayments.toLocaleString()}</p>
+            </div>
+            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+              <p className="text-[10px] text-zinc-500 uppercase">Restante</p>
+              <p className={`${remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>R$ {remaining.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onQuickAddDraft?.({
+                description: `Pagamento fatura ${card.name}`,
+                amount: remaining > 0 ? remaining : 0,
+                kind: 'debt_payment',
+                paymentMethod: 'pix',
+                cardId: card.id,
+                status: 'paid',
+                date: new Date().toISOString(),
+                competenceMonth: selectedMonth,
+              })}
+              className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-sm font-bold hover:bg-emerald-500"
+            >
+              Registrar pagamento
+            </button>
+            <button
+              onClick={() => onQuickAddDraft?.({
+                description: `Pagamento parcial ${card.name}`,
+                amount: remaining > 0 ? remaining / 2 : 0,
+                kind: 'debt_payment',
+                paymentMethod: 'pix',
+                cardId: card.id,
+                status: 'paid',
+                date: new Date().toISOString(),
+                competenceMonth: selectedMonth,
+              })}
+              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-sm"
+            >
+              Parcial
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[10px] text-zinc-500 uppercase font-bold">Transações do mês</p>
+            {[...charges, ...payments].length === 0 && <p className="text-xs text-zinc-500">Sem lançamentos para este mês.</p>}
+            {[...charges, ...payments]
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              .map((t) => (
+              <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                <div>
+                  <p className="text-white">{t.description}</p>
+                  <p className="text-[10px] text-zinc-500">{new Date(t.date).toLocaleDateString('pt-BR')} · {t.kind}</p>
+                </div>
+                <span className={`font-mono ${t.kind === 'debt_payment' ? 'text-emerald-400' : 'text-zinc-200'}`}>R$ {t.amount.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[10px] text-zinc-500 uppercase font-bold">Parcelamentos vinculados</p>
+            {relatedPlans.length === 0 && <p className="text-xs text-zinc-500">Sem parcelamentos ativos.</p>}
+            {relatedPlans.map((plan) => {
+              const pendingTx = transactions.filter((t) => t.installment?.groupId === plan.id && t.status === 'pending');
+              return (
+                <div key={plan.id} className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-sm text-white font-bold">{plan.description}</p>
+                    <p className="text-[10px] text-zinc-500">{plan.totalInstallments}x · faltam {pendingTx.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCancelPlan(plan.id)}
+                      className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+                    >
+                      Cancelar futuras
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ))}
 
       {/* Edit Form Modal/Overlay */}
       {isEditing && (
@@ -173,121 +216,34 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
                     value={formName}
                     onChange={e => setFormName(e.target.value)}
                 />
-                <div className="flex gap-2">
-                    <input 
-                        className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                        placeholder="Saldo Total R$"
-                        type="number"
-                        value={formBalance}
-                        onChange={e => setFormBalance(e.target.value)}
-                    />
-                    <input 
-                        className="w-1/3 bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                        placeholder="Dia"
-                        value={formDueDate}
-                        onChange={e => setFormDueDate(e.target.value)}
-                    />
+                <div className="grid grid-cols-2 gap-2">
+                  <input 
+                      className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
+                      placeholder="Fechamento"
+                      value={formClosing}
+                      onChange={e => setFormClosing(e.target.value)}
+                  />
+                  <input 
+                      className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
+                      placeholder="Vencimento"
+                      value={formDue}
+                      onChange={e => setFormDue(e.target.value)}
+                  />
                 </div>
                 <input 
                     className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                    placeholder="Pagamento Mínimo (R$)"
+                    placeholder="Juros mês (%)"
                     type="number"
-                    value={formMin}
-                    onChange={e => setFormMin(e.target.value)}
+                    value={formApr}
+                    onChange={e => setFormApr(e.target.value)}
                 />
                 <div className="flex gap-2 mt-2">
                     <button onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-zinc-800 rounded-xl text-zinc-400 font-bold">Cancelar</button>
-                    <button onClick={saveDebt} className="flex-1 py-3 bg-emerald-600 rounded-xl text-white font-bold">Salvar</button>
+                    <button onClick={saveCard} className="flex-1 py-3 bg-emerald-600 rounded-xl text-white font-bold">Salvar</button>
                 </div>
             </div>
         </div>
       )}
-
-      {/* Debt List */}
-      <div className="space-y-4">
-        {orderedDebts.map(debt => {
-          const dueIn = daysToDue(debt.dueDate);
-          const suggestedPayment = debt.currentInvoice || debt.minPayment || debt.balance;
-          return (
-          <div key={debt.id} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 relative group overflow-hidden">
-            
-            {/* Visual Danger Indicator (Top Border) */}
-            <div className={`absolute top-0 left-0 right-0 h-1 ${getHeatColor(debt.rolloverCost)}`}></div>
-
-            {/* Edit Button */}
-            <button 
-              onClick={() => startEdit(debt)}
-              className="absolute top-4 right-4 text-zinc-600 hover:text-white"
-            >
-              <Icons.Edit size={16} />
-            </button>
-
-            {/* Header */}
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="font-bold text-white text-lg block">{debt.name}</span>
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vence dia {debt.dueDate} · {dueIn} dias</span>
-              </div>
-            </div>
-
-            {/* The Sniper Bar (Interest Rate Visualization) */}
-            <div className="mb-4">
-                <div className="flex justify-between text-[10px] mb-1">
-                    <span className="text-zinc-500">Intensidade de Juros (Custo de Rolagem)</span>
-                    <span className={`${debt.rolloverCost > 10 ? 'text-rose-500' : 'text-zinc-400'} font-bold`}>{debt.rolloverCost}% a.m.</span>
-                </div>
-                <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
-                    <div 
-                        className={`h-full ${getHeatColor(debt.rolloverCost)}`} 
-                        style={{ width: `${Math.min((debt.rolloverCost / 15) * 100, 100)}%` }}
-                    ></div>
-                </div>
-            </div>
-
-            {/* Data Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-zinc-950/50 p-3 rounded-xl border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 block mb-1 uppercase">Fatura Atual</span>
-                <span className="text-white font-mono font-bold text-base block">
-                  {debt.currentInvoice ? `R$ ${debt.currentInvoice.toLocaleString()}` : '-'}
-                </span>
-              </div>
-
-              <div className="bg-zinc-950/50 p-3 rounded-xl border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 block mb-1 uppercase">Mínimo</span>
-                <span className="text-zinc-400 font-mono text-base block">
-                  R$ {debt.minPayment.toLocaleString()}
-                </span>
-              </div>
-            </div>
-            
-            <div className="mt-3 flex justify-between items-center">
-                 <span className="text-[10px] text-zinc-600">Saldo Devedor Total</span>
-                 <span className="text-xs text-zinc-400 font-mono">R$ {debt.balance.toLocaleString()}</span>
-            </div>
-            <div className="mt-4 flex justify-between items-center gap-3">
-              <span className="text-[10px] text-zinc-500">Prioridade: {debt.rolloverCost}% · pagar pelo menos R$ {debt.minPayment.toLocaleString()}</span>
-              <button 
-                onClick={() => onQuickAddDraft?.({
-                  amount: suggestedPayment,
-                  description: `Pagamento ${debt.name}`,
-                  category: 'Dívida',
-                  type: OperationType.DIVIDA,
-                  paymentMethod: 'Pix',
-                  person: Person.ALAN,
-                  status: 'paid',
-                  date: new Date().toISOString()
-                })}
-                className="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg font-bold transition-colors"
-              >
-                Registrar pagamento
-              </button>
-            </div>
-
-          </div>
-        );
-        })}
-      </div>
     </div>
   );
 };
