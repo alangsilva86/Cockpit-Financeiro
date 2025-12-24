@@ -1,4 +1,5 @@
 export enum OperationType {
+  RECEITA = 'Receita', // Salário, Extras, Vendas
   VIDA = 'Vida', // Custo de Vida
   DIVIDA = 'Dívida', // Amortização de Principal
   ROLAGEM = 'Rolagem', // Transferência de Dívida (Neutro)
@@ -12,6 +13,8 @@ export enum Person {
   CASA = 'Casa'
 }
 
+export type PaymentMethod = 'Pix' | 'Debit' | 'Cash' | 'Credit';
+
 export type TransactionStatus = 'pending' | 'paid';
 
 export interface Transaction {
@@ -22,6 +25,8 @@ export interface Transaction {
   description: string;
   type: OperationType;
   category: string;
+  paymentMethod: PaymentMethod;
+  cardId?: string; // If Credit
   status: TransactionStatus;
   isRecurring?: boolean; // Para clonar no próximo mês
 }
@@ -39,7 +44,8 @@ export interface Debt {
 
 export interface AppState {
   transactions: Transaction[];
-  debts: Debt[];
+  debts: Debt[]; // Acts as Cards list
+  categories: string[]; // Dynamic categories
   monthlyIncome: number;
   variableCap: number; // Teto de variáveis
 }

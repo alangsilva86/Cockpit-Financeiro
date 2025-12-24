@@ -13,6 +13,9 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
   const [activeTab, setActiveTab] = useState<TimeTab>('past');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0); // 0 = current, -1 = last month
   const [personFilter, setPersonFilter] = useState<Person | 'All'>('All');
+  
+  // State for expandable details
+  const [showLifeDetails, setShowLifeDetails] = useState(false);
 
   // Helper: Get target date based on tab and offset
   const targetDate = useMemo(() => {
@@ -53,6 +56,24 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
     return { income, lifeCost, burn, debtPrincipal, rollover, totalPaid, realCost };
   }, [filteredData, state.monthlyIncome]);
 
+  // Calculate Breakdown for Life Cost by Category
+  const lifeCostCategories = useMemo(() => {
+      const categories: Record<string, number> = {};
+      const lifeTransactions = filteredData.filter(t => t.type === OperationType.VIDA);
+      
+      lifeTransactions.forEach(t => {
+          categories[t.category] = (categories[t.category] || 0) + t.amount;
+      });
+
+      return Object.entries(categories)
+          .map(([name, amount]) => ({
+              name,
+              amount,
+              percentage: stats.lifeCost === 0 ? 0 : (amount / stats.lifeCost) * 100
+          }))
+          .sort((a, b) => b.amount - a.amount);
+  }, [filteredData, stats.lifeCost]);
+
   // Group by Type for List
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
@@ -62,16 +83,6 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
     });
     return groups;
   }, [filteredData]);
-
-  const getTypeColor = (type: OperationType) => {
-    switch (type) {
-      case OperationType.VIDA: return 'bg-blue-500 text-blue-100';
-      case OperationType.JUROS: return 'bg-rose-500 text-rose-100';
-      case OperationType.DIVIDA: return 'bg-indigo-500 text-indigo-100';
-      case OperationType.ROLAGEM: return 'bg-zinc-600 text-zinc-200';
-      default: return 'bg-zinc-700 text-zinc-300';
-    }
-  };
 
   const getPercentage = (val: number, total: number) => {
     if (total === 0) return 0;
@@ -102,7 +113,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
           {(['past', 'present', 'future'] as TimeTab[]).map(tab => (
             <button
               key={tab}
-              onClick={() => { setActiveTab(tab); setSelectedMonthOffset(0); }}
+              onClick={() => { setActiveTab(tab); setSelectedMonthOffset(0); setShowLifeDetails(false); }}
               className={`pb-3 text-sm font-bold capitalize transition-all border-b-2 ${
                 activeTab === tab 
                   ? 'text-emerald-400 border-emerald-400' 
@@ -160,15 +171,47 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
         <div className="space-y-4">
            <h3 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Para onde foi o dinheiro</h3>
            
-           {/* Life Cost */}
-           <div className="space-y-1">
-             <div className="flex justify-between text-xs mb-1">
-               <span className="text-blue-400 font-bold">Custo de Vida (Real)</span>
-               <span className="text-zinc-300">R$ {stats.lifeCost.toLocaleString()}</span>
+           {/* Life Cost with Expansion Logic */}
+           <div className={`rounded-xl border border-zinc-800/50 transition-all ${showLifeDetails ? 'bg-zinc-900/50 p-3' : 'bg-transparent'}`}>
+             <div 
+                className={`space-y-1 ${activeTab === 'past' ? 'cursor-pointer' : ''}`}
+                onClick={() => activeTab === 'past' && setShowLifeDetails(!showLifeDetails)}
+             >
+                <div className="flex justify-between text-xs mb-1 items-center">
+                    <span className="text-blue-400 font-bold flex items-center gap-1">
+                        Custo de Vida (Real)
+                        {activeTab === 'past' && (
+                            <Icons.ChevronDown size={12} className={`transition-transform duration-300 ${showLifeDetails ? 'rotate-180' : ''}`} />
+                        )}
+                    </span>
+                    <span className="text-zinc-300">R$ {stats.lifeCost.toLocaleString()}</span>
+                </div>
+                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${getPercentage(stats.lifeCost, stats.totalPaid)}%` }}></div>
+                </div>
              </div>
-             <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-               <div className="h-full bg-blue-500" style={{ width: `${getPercentage(stats.lifeCost, stats.totalPaid)}%` }}></div>
-             </div>
+
+             {/* Expanded Category List */}
+             {showLifeDetails && activeTab === 'past' && (
+                 <div className="mt-4 space-y-3 animate-in slide-in-from-top-2 pt-2 border-t border-zinc-800/50">
+                    <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-2">
+                        <span>Categoria</span>
+                        <span>% do Custo de Vida</span>
+                    </div>
+                    {lifeCostCategories.map(cat => (
+                        <div key={cat.name} className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-zinc-300">
+                                <span>{cat.name}</span>
+                                <span>{Math.round(cat.percentage)}% <span className="text-zinc-500 ml-1">(R$ {cat.amount.toLocaleString()})</span></span>
+                            </div>
+                            <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500/60" style={{ width: `${cat.percentage}%` }}></div>
+                            </div>
+                        </div>
+                    ))}
+                    {lifeCostCategories.length === 0 && <p className="text-[10px] text-zinc-500 italic">Sem dados de categorias.</p>}
+                 </div>
+             )}
            </div>
 
            {/* Burn/Interest - Highlighted */}

@@ -6,21 +6,23 @@ import { Planning } from './components/Planning';
 import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
 import { AppState, Debt, OperationType, Person, Transaction, View } from './types';
+import { INITIAL_CATEGORIES } from './services/geminiService';
 
 // Initial Mock Data with Future/Pending transactions for the Roadmap
 const INITIAL_STATE: AppState = {
   monthlyIncome: 25000,
   variableCap: 7500, // 30% of income rule
+  categories: INITIAL_CATEGORIES,
   transactions: [
     // Past/Paid
-    { id: '1', date: new Date().toISOString(), amount: 200, person: Person.ALAN, description: 'Uber Semana', type: OperationType.VIDA, category: 'Transporte', status: 'paid', isRecurring: false },
+    { id: '1', date: new Date().toISOString(), amount: 200, person: Person.ALAN, description: 'Uber Semana', type: OperationType.VIDA, category: 'Transporte', paymentMethod: 'Credit', cardId: 'd1', status: 'paid', isRecurring: false },
     
     // Future/Pending (The Roadmap)
-    { id: '2', date: new Date(new Date().setDate(5)).toISOString(), amount: 2500, person: Person.CASA, description: 'Aluguel', type: OperationType.VIDA, category: 'Moradia', status: 'pending', isRecurring: true },
-    { id: '3', date: new Date(new Date().setDate(10)).toISOString(), amount: 650, person: Person.CASA, description: 'Condomínio', type: OperationType.VIDA, category: 'Moradia', status: 'pending', isRecurring: true },
-    { id: '4', date: new Date(new Date().setDate(12)).toISOString(), amount: 11200, person: Person.ALAN, description: 'Fatura XP (Estimada)', type: OperationType.ROLAGEM, category: 'Cartão', status: 'pending', isRecurring: true },
-    { id: '5', date: new Date(new Date().setDate(12)).toISOString(), amount: 400, person: Person.ALAN, description: 'Juros Antecipação XP', type: OperationType.JUROS, category: 'Taxas', status: 'pending', isRecurring: false },
-    { id: '6', date: new Date(new Date().setDate(15)).toISOString(), amount: 800, person: Person.KELLEN, description: 'Mercado Semanal', type: OperationType.VIDA, category: 'Alimentação', status: 'pending', isRecurring: true },
+    { id: '2', date: new Date(new Date().setDate(5)).toISOString(), amount: 2500, person: Person.CASA, description: 'Aluguel', type: OperationType.VIDA, category: 'Moradia', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
+    { id: '3', date: new Date(new Date().setDate(10)).toISOString(), amount: 650, person: Person.CASA, description: 'Condomínio', type: OperationType.VIDA, category: 'Moradia', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
+    { id: '4', date: new Date(new Date().setDate(12)).toISOString(), amount: 11200, person: Person.ALAN, description: 'Fatura XP (Estimada)', type: OperationType.ROLAGEM, category: 'Cartão', paymentMethod: 'Pix', status: 'pending', isRecurring: true },
+    { id: '5', date: new Date(new Date().setDate(12)).toISOString(), amount: 400, person: Person.ALAN, description: 'Juros Antecipação XP', type: OperationType.JUROS, category: 'Taxas', paymentMethod: 'Debit', status: 'pending', isRecurring: false },
+    { id: '6', date: new Date(new Date().setDate(15)).toISOString(), amount: 800, person: Person.KELLEN, description: 'Mercado Semanal', type: OperationType.VIDA, category: 'Alimentação', paymentMethod: 'Credit', cardId: 'd2', status: 'pending', isRecurring: true },
   ],
   debts: [
     { id: 'd1', name: 'Nubank Black', balance: 12400, currentInvoice: 3850, dueDate: '05', minPayment: 1500, rolloverCost: 14, status: 'critical' },
@@ -82,6 +84,29 @@ const App: React.FC = () => {
     setCurrentView('dashboard');
   };
 
+  const handleAddDebt = (debt: Debt) => {
+    setState(prev => ({
+      ...prev,
+      debts: [...prev.debts, debt]
+    }));
+  };
+
+  const handleUpdateDebt = (updatedDebt: Debt) => {
+    setState(prev => ({
+      ...prev,
+      debts: prev.debts.map(d => d.id === updatedDebt.id ? updatedDebt : d)
+    }));
+  };
+
+  const handleAddCategory = (category: string) => {
+    if (!state.categories.includes(category)) {
+      setState(prev => ({
+        ...prev,
+        categories: [...prev.categories, category].sort()
+      }));
+    }
+  };
+
   const NavButton = ({ view, icon: Icon, label }: { view: View, icon: any, label: string }) => (
     <button 
       onClick={() => setCurrentView(view)}
@@ -118,9 +143,30 @@ const App: React.FC = () => {
         <main className="flex-1 overflow-y-auto pb-24 scroll-smooth">
           {currentView === 'dashboard' && <Dashboard state={state} onToggleStatus={handleToggleStatus} />}
           {currentView === 'reports' && <Reports state={state} onGenerateNextMonth={handleGenerateNextMonth} />}
-          {currentView === 'add' && <QuickAdd onAdd={handleAddTransactions} onCancel={() => setCurrentView('dashboard')} />}
-          {currentView === 'debts' && <Passivos debts={state.debts} />}
-          {currentView === 'plan' && <Planning onGenerateNextMonth={handleGenerateNextMonth} variableCap={state.variableCap} />}
+          {currentView === 'add' && (
+            <QuickAdd 
+              onAdd={handleAddTransactions} 
+              onCancel={() => setCurrentView('dashboard')} 
+              availableCategories={state.categories}
+              availableCards={state.debts}
+              onAddCard={handleAddDebt}
+            />
+          )}
+          {currentView === 'debts' && (
+            <Passivos 
+              debts={state.debts} 
+              onAddDebt={handleAddDebt}
+              onUpdateDebt={handleUpdateDebt}
+            />
+          )}
+          {currentView === 'plan' && (
+            <Planning 
+              onGenerateNextMonth={handleGenerateNextMonth} 
+              variableCap={state.variableCap} 
+              categories={state.categories}
+              onAddCategory={handleAddCategory}
+            />
+          )}
         </main>
 
         {/* Bottom Navigation (Hidden on Add screen) */}

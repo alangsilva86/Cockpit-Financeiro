@@ -1,12 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Icons } from './Icons';
 
 interface PlanningProps {
   onGenerateNextMonth: () => void;
   variableCap: number;
+  categories: string[];
+  onAddCategory: (cat: string) => void;
 }
 
-export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap }) => {
+export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap, categories, onAddCategory }) => {
+  const [newCat, setNewCat] = useState('');
+  const [isAddingCat, setIsAddingCat] = useState(false);
+
+  const handleAddCat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newCat.trim()) {
+      onAddCategory(newCat.trim());
+      setNewCat('');
+      setIsAddingCat(false);
+    }
+  };
+
   return (
     <div className="p-4 space-y-6 animate-in fade-in">
       
@@ -53,6 +67,41 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
            <span className="text-zinc-200">Renda Recorrente</span>
            <span className="font-mono text-white font-bold">R$ 25.000</span>
         </div>
+      </div>
+
+      {/* Category Management */}
+      <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800">
+         <div className="flex justify-between items-center mb-4">
+           <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider">Categorias de Gasto</h3>
+           <button 
+             onClick={() => setIsAddingCat(!isAddingCat)} 
+             className="text-emerald-500 hover:text-emerald-400"
+           >
+             <Icons.Add size={20} />
+           </button>
+         </div>
+         
+         {isAddingCat && (
+           <form onSubmit={handleAddCat} className="flex gap-2 mb-4 animate-in fade-in">
+             <input 
+               autoFocus
+               className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none"
+               placeholder="Nova Categoria..."
+               value={newCat}
+               onChange={e => setNewCat(e.target.value)}
+             />
+             <button type="submit" className="bg-emerald-600 text-white px-4 rounded-lg font-bold text-sm">OK</button>
+           </form>
+         )}
+
+         <div className="flex flex-wrap gap-2">
+           {categories.map(cat => (
+             <span key={cat} className="px-3 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-full border border-zinc-700">
+               {cat}
+             </span>
+           ))}
+         </div>
+         <p className="text-[10px] text-zinc-600 mt-3">A IA usará estas categorias para classificar novos gastos automaticamente.</p>
       </div>
       
       <p className="text-center text-xs text-zinc-600 mt-8">

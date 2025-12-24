@@ -1,8 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, OperationType } from '../types';
 
-// Standardized categories for the app
-export const STANDARD_CATEGORIES = [
+// Explicitly separate for UI filtering
+export const INCOME_CATEGORIES = [
+  'Salário',
+  'Rendimentos',
+  'Vendas',
+  'Reembolso',
+  'Cashback',
+  'Outros (Entrada)'
+];
+
+export const EXPENSE_CATEGORIES = [
   'Moradia',
   'Alimentação',
   'Transporte',
@@ -17,20 +26,23 @@ export const STANDARD_CATEGORIES = [
   'Outros'
 ];
 
+// Combine for backward compatibility and initial state
+export const INITIAL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({ apiKey });
 };
 
-export const suggestCategory = async (description: string): Promise<string | null> => {
+export const suggestCategory = async (description: string, availableCategories: string[]): Promise<string | null> => {
   const ai = getClient();
   if (!ai) return null;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Classify this transaction description: "${description}" into exactly one of these categories: ${STANDARD_CATEGORIES.join(', ')}. Return only the category name.`,
+      contents: `Classify this transaction description: "${description}" into exactly one of these categories: ${availableCategories.join(', ')}. Return only the category name.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -45,7 +57,7 @@ export const suggestCategory = async (description: string): Promise<string | nul
     const json = JSON.parse(response.text || '{}');
     // Validate that the returned category is actually in our list
     const category = json.category;
-    if (STANDARD_CATEGORIES.includes(category)) {
+    if (availableCategories.includes(category)) {
       return category;
     }
     return 'Outros';
@@ -61,7 +73,7 @@ export interface ReceiptData {
   category: string | null;
 }
 
-export const parseReceiptImage = async (base64Image: string): Promise<ReceiptData | null> => {
+export const parseReceiptImage = async (base64Image: string, availableCategories: string[]): Promise<ReceiptData | null> => {
   const ai = getClient();
   if (!ai) return null;
 
@@ -77,7 +89,7 @@ export const parseReceiptImage = async (base64Image: string): Promise<ReceiptDat
             }
           },
           {
-            text: `Analyze this receipt image. Extract the GRAND TOTAL amount (final value paid). Identify the merchant/establishment name for the description. Also classify into one of these categories: ${STANDARD_CATEGORIES.join(', ')}. Return JSON.`
+            text: `Analyze this receipt image. Extract the GRAND TOTAL amount (final value paid). Identify the merchant/establishment name for the description. Also classify into one of these categories: ${availableCategories.join(', ')}. Return JSON.`
           }
         ]
       },
@@ -98,7 +110,7 @@ export const parseReceiptImage = async (base64Image: string): Promise<ReceiptDat
     
     // Validate category
     let category = json.category;
-    if (!STANDARD_CATEGORIES.includes(category)) {
+    if (!availableCategories.includes(category)) {
       category = 'Outros';
     }
 
