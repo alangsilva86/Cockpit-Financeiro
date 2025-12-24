@@ -198,7 +198,7 @@ const buildDemoState = (): AppState => {
     },
   ];
 
-  const demoTransactions: Transaction[] = [
+  const rawDemoTransactions: Transaction[] = [
     {
       id: 'demo-1',
       date: monthStart.toISOString(),
@@ -300,7 +300,8 @@ const buildDemoState = (): AppState => {
       status: 'paid',
       needsSync: false,
     },
-  ].map(normalizeTransaction);
+  ];
+  const demoTransactions = rawDemoTransactions.map(normalizeTransaction);
 
   return {
     schemaVersion: SCHEMA_VERSION,

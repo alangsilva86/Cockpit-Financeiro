@@ -396,25 +396,27 @@ export const Reports: React.FC<ReportsProps> = ({
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
+          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64 min-h-0 min-w-0">
             <div className="flex justify-between items-center mb-2">
               <h4 className="text-xs text-zinc-400 uppercase font-bold">Custo de Vida por categoria</h4>
               <span className="text-[10px] text-zinc-500">{lifeChartData.length} itens</span>
             </div>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={lifeChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} paddingAngle={4}>
-                  {lifeChartData.map((entry, index) => (
-                    <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="w-full h-full min-h-0 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
+                <PieChart>
+                  <Pie data={lifeChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} paddingAngle={4}>
+                    {lifeChartData.map((entry, index) => (
+                      <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64">
+          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64 min-h-0 min-w-0">
             <div className="flex justify-between items-center mb-2">
               <h4 className="text-xs text-zinc-400 uppercase font-bold">Linha do tempo de gastos</h4>
               <div className="flex gap-2 text-[10px] text-zinc-500">
@@ -422,15 +424,17 @@ export const Reports: React.FC<ReportsProps> = ({
                 <span className="text-rose-400">Juros</span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                <XAxis dataKey="month" stroke="#a1a1aa" fontSize={10} />
-                <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
-                <Line type="monotone" dataKey="gasto" stroke="#38bdf8" strokeWidth={2} />
-                <Line type="monotone" dataKey="juros" stroke="#f43f5e" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="w-full h-full min-h-0 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
+                <LineChart data={monthlySeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <XAxis dataKey="month" stroke="#a1a1aa" fontSize={10} />
+                  <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+                  <Line type="monotone" dataKey="gasto" stroke="#38bdf8" strokeWidth={2} />
+                  <Line type="monotone" dataKey="juros" stroke="#f43f5e" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
@@ -605,7 +609,7 @@ export const Reports: React.FC<ReportsProps> = ({
                       key={t.id}
                       transaction={t}
                       onQuickAdd={onQuickAddDraft}
-                      onRemove={onRemoveTransaction}
+                      onRemoveTransaction={onRemoveTransaction}
                     />
                   ))}
                 </div>
