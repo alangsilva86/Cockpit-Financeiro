@@ -182,6 +182,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [swUpdateReady, setSwUpdateReady] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number>(0);
+  const [forceSync, setForceSync] = useState(false);
 
   useEffect(() => {
     try {
@@ -214,7 +215,10 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const online = () => setIsOnline(true);
+    const online = () => {
+      setIsOnline(true);
+      setForceSync(true);
+    };
     const offline = () => setIsOnline(false);
     window.addEventListener('online', online);
     window.addEventListener('offline', offline);
@@ -238,10 +242,10 @@ const App: React.FC = () => {
     if (!isOnline) return;
     let mounted = true;
 
-    const attemptSync = async () => {
+    const attemptSync = async (force = false) => {
       if (!mounted || isSyncing) return;
       const now = Date.now();
-      if (now - lastSyncAt < 3000) return;
+      if (!force && now - lastSyncAt < 3000) return;
       setIsSyncing(true);
       try {
         const result = await syncAppState(state);
@@ -260,10 +264,11 @@ const App: React.FC = () => {
         pushToast('Falha na sincronização. Tentaremos novamente.', 'error');
       } finally {
         setIsSyncing(false);
+        if (force) setForceSync(false);
       }
     };
 
-    attemptSync();
+    attemptSync(forceSync);
     const interval = setInterval(attemptSync, 20000);
     const visibilityHandler = () => {
       if (document.visibilityState === 'visible') {
@@ -277,7 +282,7 @@ const App: React.FC = () => {
       clearInterval(interval);
       window.removeEventListener('visibilitychange', visibilityHandler);
     };
-  }, [isOnline, isSyncing, state.updatedAt, lastSyncAt]);
+  }, [isOnline, isSyncing, state.updatedAt, lastSyncAt, forceSync]);
 
   const pushToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
