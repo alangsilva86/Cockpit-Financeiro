@@ -18,15 +18,20 @@ const withTimeout = async <T>(promise: Promise<T>, ms = 8000): Promise<T> => {
 
 const supabaseHeaders = () => {
   if (!SUPABASE_KEY) return {};
+  const schemaHeaders =
+    SUPABASE_SCHEMA && SUPABASE_SCHEMA !== 'public'
+      ? { 'Accept-Profile': SUPABASE_SCHEMA, 'Content-Profile': SUPABASE_SCHEMA }
+      : {};
   return {
     apikey: SUPABASE_KEY,
     Authorization: `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
+    ...schemaHeaders,
   };
 };
 
 const buildSupabaseUrl = (query: string) => {
-  return `${SUPABASE_URL}/rest/v1/${SUPABASE_SCHEMA}.${SUPABASE_TABLE}${query}`;
+  return `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}${query}`;
 };
 
 const getTimestamp = (value?: string) => {
@@ -119,7 +124,6 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const stored = (await kv.get(serverKey)) as AppState | null;
     const base: AppState = {
       schemaVersion: 2,
       transactions: [],
@@ -165,6 +169,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ state: merged, serverUpdatedAt: merged.updatedAt });
   } catch (error) {
     console.error('sync error', error);
-    return res.status(500).json({ error: 'sync failed' });
+    const message = error instanceof Error ? error.message : 'sync failed';
+    return res.status(500).json({ error: message });
   }
 }
