@@ -70,8 +70,9 @@ export const Passivos: React.FC<PassivosProps> = ({
       const payments = transactions.filter(
         (t) => t.kind === 'debt_payment' && t.cardId === card.id && (t.competenceMonth || competenceString(new Date(t.date))) === selectedMonth
       );
-      const totalCharges = charges.reduce((acc, t) => acc + t.amount, 0);
-      const totalPayments = payments.reduce((acc, t) => acc + t.amount, 0);
+      const getAmt = (t: Transaction) => Number(t.amount || 0);
+      const totalCharges = charges.reduce((acc, t) => acc + getAmt(t), 0);
+      const totalPayments = payments.reduce((acc, t) => acc + getAmt(t), 0);
       const remaining = totalCharges - totalPayments;
       const relatedPlans = installmentPlans.filter((p) => p.cardId === card.id && p.status === 'active');
       return { card, totalCharges, totalPayments, remaining, charges, payments, relatedPlans };
@@ -81,6 +82,17 @@ export const Passivos: React.FC<PassivosProps> = ({
   const handleCancelPlan = (planId: string) => {
     const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled' } : p));
     const updatedTx = transactions.filter((t) => !(t.installment?.groupId === planId && t.status === 'pending'));
+    onUpdateInstallments(updatedPlans, updatedTx);
+  };
+
+  const handleFinishPlan = (planId: string) => {
+    const now = new Date();
+    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'finished', remainingInstallments: 0 } : p));
+    const updatedTx = transactions.map((t) =>
+      t.installment?.groupId === planId && t.status === 'pending'
+        ? { ...t, status: 'paid', date: now.toISOString(), competenceMonth: competenceString(now), needsSync: true }
+        : t
+    );
     onUpdateInstallments(updatedPlans, updatedTx);
   };
 
@@ -112,7 +124,7 @@ export const Passivos: React.FC<PassivosProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <p className="text-white font-bold text-lg">{card.name}</p>
-              <p className="text-[10px] text-zinc-500">Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}</p>
+              <p className="text-[10px] text-zinc-500">Competência {selectedMonth} · Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}</p>
             </div>
             <button onClick={() => startEdit(card)} className="text-zinc-500 hover:text-white"><Icons.Edit size={16}/></button>
           </div>
@@ -174,7 +186,7 @@ export const Passivos: React.FC<PassivosProps> = ({
                   <p className="text-white">{t.description}</p>
                   <p className="text-[10px] text-zinc-500">{new Date(t.date).toLocaleDateString('pt-BR')} · {t.kind}</p>
                 </div>
-                <span className={`font-mono ${t.kind === 'debt_payment' ? 'text-emerald-400' : 'text-zinc-200'}`}>R$ {t.amount.toLocaleString()}</span>
+                <span className={`font-mono ${t.kind === 'debt_payment' ? 'text-emerald-400' : 'text-zinc-200'}`}>R$ {Number(t.amount || 0).toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -196,6 +208,12 @@ export const Passivos: React.FC<PassivosProps> = ({
                       className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
                     >
                       Cancelar futuras
+                    </button>
+                    <button
+                      onClick={() => handleFinishPlan(plan.id)}
+                      className="text-[10px] px-3 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10"
+                    >
+                      Quitar restantes
                     </button>
                   </div>
                 </div>

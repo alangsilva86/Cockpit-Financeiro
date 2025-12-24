@@ -24,11 +24,22 @@ const competenceFromDate = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const calcCompetenceWithCard = (iso: string, card?: Card) => {
+  const d = new Date(iso);
+  if (!card?.closingDay) return competenceFromDate(iso);
+  const day = d.getDate();
+  if (day > card.closingDay) {
+    d.setMonth(d.getMonth() + 1);
+  }
+  return competenceFromDate(d.toISOString());
+};
+
 const buildInstallments = (
   totalAmount: number,
   totalInstallments: number,
   firstDate: string,
-  base: Omit<Transaction, 'id' | 'competenceMonth' | 'status' | 'installment'>
+  base: Omit<Transaction, 'id' | 'competenceMonth' | 'status' | 'installment'>,
+  card?: Card
 ): { transactions: Transaction[]; plan: InstallmentPlan } => {
   const planId = `plan-${Date.now().toString(36)}`;
   const per = Math.round((totalAmount / totalInstallments) * 100) / 100;
@@ -50,7 +61,7 @@ const buildInstallments = (
       ...base,
       id: `${planId}-${i + 1}`,
       date: iso,
-      competenceMonth: competenceFromDate(iso),
+      competenceMonth: calcCompetenceWithCard(iso, card),
       status,
       amount,
       installment: {
@@ -316,13 +327,14 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
       const { transactions: txs, plan } = buildInstallments(totalAmount, installmentsCount, firstInstallmentDate, {
         ...base,
         kind: 'expense',
-      });
+      }, availableCards.find(c => c.id === selectedCardId));
       newPlan = plan;
       transactions.push(...txs.map((t) => ({ ...t, status: t.status || computedStatus })));
     } else {
       transactions.push({
         ...base,
         id: Date.now().toString(),
+        competenceMonth: paymentMethod === 'credit' ? calcCompetenceWithCard(isoDate, availableCards.find(c => c.id === selectedCardId)) : base.competenceMonth,
         status: computedStatus,
       });
     }

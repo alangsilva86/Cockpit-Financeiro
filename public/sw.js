@@ -9,7 +9,16 @@ const PRECACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const asset of PRECACHE_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          // Ignore failures (e.g., navigation requests) to avoid aborting install
+          console.warn('SW precache skip', asset, err);
+        }
+      }
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -59,4 +68,3 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
-

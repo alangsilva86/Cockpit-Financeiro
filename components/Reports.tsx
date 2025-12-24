@@ -52,11 +52,12 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
   // Aggregations
   const stats = useMemo(() => {
-    const incomeExtra = filteredData.filter(t => t.kind === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const lifeCost = filteredData.filter(t => t.kind === 'expense').reduce((acc, t) => acc + t.amount, 0);
-    const burn = filteredData.filter(t => t.kind === 'fee_interest').reduce((acc, t) => acc + t.amount, 0);
-    const debtPrincipal = filteredData.filter(t => t.kind === 'debt_payment').reduce((acc, t) => acc + t.amount, 0);
-    const transfer = filteredData.filter(t => t.kind === 'transfer').reduce((acc, t) => acc + t.amount, 0);
+    const getAmt = (t: Transaction) => Number(t.amount || 0);
+    const incomeExtra = filteredData.filter(t => t.kind === 'income').reduce((acc, t) => acc + getAmt(t), 0);
+    const lifeCost = filteredData.filter(t => t.kind === 'expense').reduce((acc, t) => acc + getAmt(t), 0);
+    const burn = filteredData.filter(t => t.kind === 'fee_interest').reduce((acc, t) => acc + getAmt(t), 0);
+    const debtPrincipal = filteredData.filter(t => t.kind === 'debt_payment').reduce((acc, t) => acc + getAmt(t), 0);
+    const transfer = filteredData.filter(t => t.kind === 'transfer').reduce((acc, t) => acc + getAmt(t), 0);
     const income = state.monthlyIncome + incomeExtra;
     const totalPaid = lifeCost + burn + debtPrincipal + transfer;
     const realCost = lifeCost + burn;
@@ -94,8 +95,9 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
       if (!map[key]) {
         map[key] = { month: d.toLocaleDateString('pt-BR', { month: 'short' }), gasto: 0, juros: 0, order: d.getFullYear() * 12 + d.getMonth() };
       }
-      if (t.kind === 'fee_interest') map[key].juros += t.amount;
-      if (t.kind === 'expense') map[key].gasto += t.amount;
+      const amt = Number(t.amount || 0);
+      if (t.kind === 'fee_interest') map[key].juros += amt;
+      if (t.kind === 'expense') map[key].gasto += amt;
     });
     return Object.values(map)
       .sort((a, b) => a.order - b.order)
@@ -367,6 +369,18 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 >
                   Cancelar futuras
                 </button>
+                <button
+                  onClick={() => onUpdateInstallments?.(
+                    state.installmentPlans.map((p) => p.id === plan.id ? { ...p, status: 'finished', remainingInstallments: 0 } : p),
+                    state.transactions.map((t) => t.installment?.groupId === plan.id && t.status === 'pending'
+                      ? { ...t, status: 'paid', date: new Date().toISOString(), competenceMonth: t.competenceMonth || '', needsSync: true }
+                      : t)
+                  )}
+                  disabled={!onUpdateInstallments}
+                  className="text-[10px] px-3 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  Quitar restantes
+                </button>
                 <span className="text-[10px] text-zinc-500 self-center">{totalGenerated} lanç.</span>
               </div>
             </div>
@@ -457,7 +471,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                   type === 'fee_interest' ? 'bg-rose-500/10 text-rose-400' : 'bg-zinc-800 text-zinc-400'
                 }`}>
                   <span>{type}</span>
-                  <span>R$ {items.reduce((a,b) => a + b.amount, 0).toLocaleString()}</span>
+                  <span>R$ {items.reduce((a,b) => a + Number(b.amount || 0), 0).toLocaleString()}</span>
                 </div>
                 
                 <div className="divide-y divide-zinc-800/50">
@@ -474,7 +488,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-mono text-zinc-300">R$ {t.amount.toLocaleString()}</span>
+                        <span className="text-sm font-mono text-zinc-300">R$ {Number(t.amount || 0).toLocaleString()}</span>
                         <button 
                           className="text-zinc-600 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
                           onClick={() => onQuickAddDraft?.({

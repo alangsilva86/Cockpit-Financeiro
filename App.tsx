@@ -148,6 +148,7 @@ const App: React.FC = () => {
   const [quickAddDraft, setQuickAddDraft] = useState<TransactionDraft | null>(null);
   const [lastGeneration, setLastGeneration] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [swUpdateReady, setSwUpdateReady] = useState(false);
 
   useEffect(() => {
     try {
@@ -171,6 +172,8 @@ const App: React.FC = () => {
       if (views.includes(hash as View)) setCurrentView(hash as View);
     };
     window.addEventListener('hashchange', handler);
+    const swHandler = () => setSwUpdateReady(true);
+    window.addEventListener('sw-update-ready', swHandler as any);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
 
@@ -546,6 +549,17 @@ const App: React.FC = () => {
           toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/40 text-rose-100' : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-100'
         }`}>
           {toast.message}
+        </div>
+      )}
+      {swUpdateReady && (
+        <div className="fixed bottom-20 right-4 left-4 md:left-auto md:w-72 p-3 rounded-xl shadow-2xl border text-sm bg-blue-500/10 border-blue-500/40 text-blue-100 flex justify-between items-center">
+          <span>Nova versão disponível</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-xs font-bold text-white bg-blue-600 px-3 py-1 rounded-lg hover:bg-blue-500"
+          >
+            Atualizar
+          </button>
         </div>
       )}
     </div>
