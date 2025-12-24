@@ -29,6 +29,7 @@ export interface Transaction {
   cardId?: string; // If Credit
   status: TransactionStatus;
   isRecurring?: boolean; // Para clonar no próximo mês
+  needsSync?: boolean; // marcado quando criado offline
 }
 
 export interface Debt {
@@ -51,3 +52,18 @@ export interface AppState {
 }
 
 export type View = 'dashboard' | 'add' | 'plan' | 'debts' | 'reports';
+
+export type TransactionDraft = Partial<
+  Pick<
+    Transaction,
+    | 'amount'
+    | 'person'
+    | 'description'
+    | 'type'
+    | 'category'
+    | 'paymentMethod'
+    | 'cardId'
+    | 'status'
+    | 'date'
+  >
+>;

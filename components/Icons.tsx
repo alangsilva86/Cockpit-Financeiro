@@ -23,7 +23,8 @@ import {
   Trash2,
   MoreHorizontal,
   Camera,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 
 export const Icons = {
@@ -51,5 +52,6 @@ export const Icons = {
   Trash: Trash2,
   More: MoreHorizontal,
   Camera: Camera,
-  Loader: Loader2
+  Loader: Loader2,
+  Close: X
 };

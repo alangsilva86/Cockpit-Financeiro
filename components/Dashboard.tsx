@@ -1,23 +1,46 @@
-import React, { useMemo } from 'react';
-import { AppState, OperationType, Transaction } from '../types';
+import React, { useMemo, useState } from 'react';
+import { AppState, OperationType, Person, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
 
 interface DashboardProps {
   state: AppState;
   onToggleStatus: (id: string) => void;
+  onQuickAddDraft: (draft: TransactionDraft) => void;
+  isOnline: boolean;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus }) => {
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQuickAddDraft, isOnline }) => {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [personFilter, setPersonFilter] = useState<Person | 'All'>('All');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [paymentFilter, setPaymentFilter] = useState<string>('All');
+
+  const targetDate = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthOffset);
+    return d;
+  }, [monthOffset]);
+
+  const currentMonth = targetDate.getMonth();
+  const currentYear = targetDate.getFullYear();
+  const monthLabel = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const categoryOptions = useMemo(
+    () => ['All', ...Array.from(new Set(state.transactions.map((t) => t.category))).sort()],
+    [state.transactions]
+  );
 
   // 1. Filter Current Month Data
   const monthData = useMemo(() => {
     return state.transactions.filter(t => {
       const d = new Date(t.date);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      const matchesMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      const matchesPerson = personFilter === 'All' || t.person === personFilter;
+      const matchesCategory = categoryFilter === 'All' || t.category === categoryFilter;
+      const matchesPayment = paymentFilter === 'All' || t.paymentMethod === paymentFilter;
+      return matchesMonth && matchesPerson && matchesCategory && matchesPayment;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [state.transactions, currentMonth, currentYear]);
+  }, [state.transactions, currentMonth, currentYear, personFilter, categoryFilter, paymentFilter]);
 
   // 2. Calculate Big Numbers (Forecast based)
   const totals = useMemo(() => {
@@ -101,6 +124,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus }) =
         </div>
 
         <div className="px-6 pt-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setMonthOffset(o => o - 1)} className="p-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white">
+                <Icons.ChevronLeft size={16} />
+              </button>
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">{monthLabel}</span>
+              <button onClick={() => setMonthOffset(o => o + 1)} className="p-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white">
+                <Icons.ChevronRight size={16} />
+              </button>
+              <span className={`text-[9px] px-2 py-1 rounded-full border ${isOnline ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/5' : 'text-amber-300 border-amber-400/30 bg-amber-500/5'}`}>
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+            <div className="flex gap-1">
+              {(['All', Person.ALAN, Person.KELLEN, Person.CASA] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPersonFilter(p)}
+                  className={`px-2 py-1 rounded-full text-[10px] font-bold border ${personFilter === p ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'}`}
+                >
+                  {p === 'All' ? 'Todos' : p}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex justify-between items-start mb-4">
             <div>
               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-2">
@@ -147,12 +195,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus }) =
       <div className="px-4">
         <h3 className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mb-4 px-2">Linha do Tempo</h3>
         
+        <div className="flex flex-wrap gap-2 mb-4 px-2">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-2 py-2"
+          >
+            {categoryOptions.map((cat) => (
+              <option key={cat} value={cat}>{cat === 'All' ? 'Todas categorias' : cat}</option>
+            ))}
+          </select>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-2 py-2"
+          >
+            {['All', 'Credit', 'Pix', 'Debit', 'Cash'].map((p) => (
+              <option key={p} value={p}>{p === 'All' ? 'Todos pagamentos' : p}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { setCategoryFilter('All'); setPaymentFilter('All'); }}
+            className="text-[10px] text-emerald-400 hover:text-white px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5"
+          >
+            Limpar filtros
+          </button>
+        </div>
+        
         <div className="relative border-l border-zinc-800 ml-3 space-y-8">
           {monthData.map((item) => {
             const { day, weekday } = formatDate(item.date);
             const isPaid = item.status === 'paid';
             const isPast = new Date(item.date) < new Date() && !isPaid;
             const isIncome = item.type === OperationType.RECEITA;
+            const isOffline = item.needsSync;
 
             return (
               <div key={item.id} className="relative pl-6 group">
@@ -191,6 +267,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus }) =
                     <span className={`font-mono font-bold text-sm tracking-tight ${isIncome ? 'text-emerald-400' : item.type === OperationType.ROLAGEM ? 'text-zinc-500' : 'text-zinc-100'}`}>
                       {isIncome ? '+' : ''} {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
+                    {isOffline && <span className="text-[9px] text-amber-300">Pendente de sincronizar</span>}
+                    {item.status === 'pending' && !isPaid && !isIncome && (
+                      <span className="text-[9px] text-zinc-500">Vence em {Math.max(0, Math.ceil((new Date(item.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d</span>
+                    )}
                     
                     <button 
                       onClick={() => onToggleStatus(item.id)}
@@ -202,6 +282,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus }) =
                       {isPaid ? <Icons.Check size={10}/> : null}
                       {isPaid ? 'PAGO' : 'CONFIRMAR'}
                     </button>
+                    {isPast && !isPaid && (
+                      <button
+                        onClick={() => onQuickAddDraft({
+                          amount: item.amount,
+                          description: item.description,
+                          category: item.category,
+                          type: item.type,
+                          paymentMethod: item.paymentMethod,
+                          cardId: item.cardId,
+                          person: item.person,
+                          status: 'paid',
+                          date: new Date().toISOString()
+                        })}
+                        className="text-[10px] text-emerald-400 underline mt-2 hover:text-white"
+                      >
+                        Registrar pagamento
+                      </button>
+                    )}
                   </div>
 
                 </div>

@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Debt, OperationType, PaymentMethod, Person, Transaction } from '../types';
+import { Debt, OperationType, PaymentMethod, Person, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
 import { suggestCategory, parseReceiptImage, INCOME_CATEGORIES } from '../services/geminiService';
 
 interface QuickAddProps {
-  onAdd: (transactions: Transaction[]) => void;
+  onAdd: (transactions: Transaction[], options?: { stayOnAdd?: boolean }) => void;
   onCancel: () => void;
   availableCategories: string[];
   availableCards: Debt[];
   onAddCard: (card: Debt) => void;
+  draft?: TransactionDraft | null;
+  onClearDraft: () => void;
+  isOnline: boolean;
+  onToast: (message: string, type?: 'success' | 'error') => void;
 }
 
-export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCategories, availableCards, onAddCard }) => {
+export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCategories, availableCards, onAddCard, draft, onClearDraft, isOnline, onToast }) => {
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<OperationType>(OperationType.VIDA);
@@ -37,6 +41,21 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
 
   // UI State for Template Menu
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stayOnAdd, setStayOnAdd] = useState(false);
+
+  const resetForm = () => {
+    setAmount('');
+    setDescription('');
+    setCategory('');
+    setPaymentMethod('Credit');
+    setSelectedCardId(availableCards[0]?.id || '');
+    setIsRollover(false);
+    setRolloverFee('');
+    setStayOnAdd(false);
+    setError(null);
+    onClearDraft();
+  };
 
   // --- Filter Categories based on Type ---
   const displayedCategories = useMemo(() => {
@@ -45,6 +64,19 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
     }
     return availableCategories.filter(cat => !INCOME_CATEGORIES.includes(cat));
   }, [type, availableCategories]);
+
+  const progress = useMemo(() => {
+    const checkpoints = [
+      type,
+      amount,
+      description && category,
+      person,
+      paymentMethod || type === OperationType.RECEITA,
+    ];
+    return Math.round((checkpoints.filter(Boolean).length / 4) * 100);
+  }, [type, amount, description, category, person, paymentMethod]);
+
+  const isFutureDate = useMemo(() => new Date(date) > new Date(), [date]);
 
   // --- Visual Context Logic ---
   const getAmbientColor = () => {
@@ -87,6 +119,18 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
       clearTimeout(timer);
     };
   }, [description, category, displayedCategories]);
+
+  useEffect(() => {
+    if (!draft) return;
+    if (draft.amount !== undefined) setAmount(draft.amount.toString());
+    if (draft.description) setDescription(draft.description);
+    if (draft.type) setType(draft.type);
+    if (draft.category) setCategory(draft.category);
+    if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+    if (draft.cardId) setSelectedCardId(draft.cardId);
+    if (draft.person) setPerson(draft.person);
+    if (draft.date) setDate(draft.date.split('T')[0]);
+  }, [draft]);
 
   const handleTypeChange = (t: OperationType) => {
     setType(t);
@@ -181,9 +225,15 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !description || !category) return;
+    setError(null);
+    if (!amount || !description || !category) {
+      setError('Preencha valor, descrição e categoria.');
+      onToast('Preencha os campos obrigatórios.', 'error');
+      return;
+    }
     if (paymentMethod === 'Credit' && !selectedCardId && type !== OperationType.RECEITA) {
-        alert("Selecione um cartão de crédito");
+        setError('Selecione um cartão de crédito.');
+        onToast('Selecione um cartão de crédito.', 'error');
         return;
     }
 
@@ -198,6 +248,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
     const isoDate = finalDate.toISOString();
     
     const baseId = Date.now().toString();
+    const computedStatus = isFutureDate ? 'pending' : 'paid';
 
     newTransactions.push({
       id: baseId,
@@ -209,7 +260,8 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
       category,
       paymentMethod,
       cardId: paymentMethod === 'Credit' ? selectedCardId : undefined,
-      status: 'paid'
+      status: computedStatus,
+      needsSync: !isOnline
     });
 
     if (isRollover && rolloverFee) {
@@ -223,11 +275,16 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
         category: 'Taxas',
         paymentMethod: paymentMethod,
         cardId: paymentMethod === 'Credit' ? selectedCardId : undefined,
-        status: 'paid'
+        status: computedStatus,
+        needsSync: !isOnline
       });
     }
 
-    onAdd(newTransactions);
+    onAdd(newTransactions, { stayOnAdd });
+    onToast(isOnline ? 'Lançamento salvo' : 'Guardado offline para sincronizar');
+    if (stayOnAdd) {
+      resetForm();
+    }
   };
 
   return (
@@ -330,7 +387,29 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
             </button>
         </div>
       </div>
+
+      <div className="mb-4">
+        <div className="flex justify-between text-[10px] text-zinc-500 uppercase font-bold mb-1">
+          <span>Fluxo</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }}></div>
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1 flex justify-between">
+          <span>{isFutureDate ? 'Data futura: cria pendente' : 'Data de hoje: marca como pago'}</span>
+          <span className={isOnline ? 'text-emerald-400' : 'text-amber-300'}>
+            {isOnline ? 'Online' : 'Offline: irá sincronizar'}
+          </span>
+        </div>
+      </div>
       
+      {error && (
+        <div className="text-xs text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-3">
+          {error}
+        </div>
+      )}
+
       {/* === STEP 1: OPERATION TYPE (NAVIGATION) === */}
       <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
           <div className="flex gap-2">
@@ -518,10 +597,19 @@ export const QuickAdd: React.FC<QuickAddProps> = ({ onAdd, onCancel, availableCa
         </div>
 
         {/* === ACTION BUTTONS === */}
+        <label className="flex items-center gap-2 text-[11px] text-zinc-400">
+          <input 
+            type="checkbox" 
+            checked={stayOnAdd} 
+            onChange={(e) => setStayOnAdd(e.target.checked)} 
+            className="accent-emerald-500"
+          />
+          Manter aberto e adicionar outro
+        </label>
         <div className="flex gap-4 pt-2 mt-auto">
           <button 
             type="button" 
-            onClick={onCancel}
+            onClick={() => { resetForm(); onCancel(); }}
             className="w-24 py-4 rounded-2xl bg-zinc-900/50 text-zinc-500 font-bold hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
           >
             Voltar

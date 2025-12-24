@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { QuickAdd } from './components/QuickAdd';
 import { Passivos } from './components/Passivos';
 import { Planning } from './components/Planning';
 import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
-import { AppState, Debt, OperationType, Person, Transaction, View } from './types';
+import { AppState, Debt, OperationType, Person, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/geminiService';
+import { syncTransactionsQueue } from './services/syncService';
 
 // Initial Mock Data with Future/Pending transactions for the Roadmap
 const INITIAL_STATE: AppState = {
@@ -30,30 +31,168 @@ const INITIAL_STATE: AppState = {
   ]
 };
 
+const STORAGE_KEY = 'cockpit-state-v1';
+const VIEW_KEY = 'cockpit-view';
+
+const normalizeTransaction = (tx: Transaction): Transaction => {
+  const status = tx.status || (new Date(tx.date) > new Date() ? 'pending' : 'paid');
+  return {
+    ...tx,
+    status,
+    needsSync: tx.needsSync ?? false,
+  };
+};
+
+const loadPersistedState = (): AppState => {
+  if (typeof localStorage === 'undefined') return INITIAL_STATE;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return INITIAL_STATE;
+    const parsed = JSON.parse(raw) as Partial<AppState>;
+
+    return {
+      ...INITIAL_STATE,
+      ...parsed,
+      transactions: (parsed.transactions || INITIAL_STATE.transactions).map(normalizeTransaction),
+      debts: parsed.debts || INITIAL_STATE.debts,
+      categories: parsed.categories || INITIAL_STATE.categories,
+      monthlyIncome: parsed.monthlyIncome ?? INITIAL_STATE.monthlyIncome,
+      variableCap: parsed.variableCap ?? INITIAL_STATE.variableCap,
+    };
+  } catch (error) {
+    console.error('Erro ao hidratar estado, usando padrão', error);
+    return INITIAL_STATE;
+  }
+};
+
+const getInitialView = (): View => {
+  if (typeof window === 'undefined') return 'dashboard';
+  const hash = window.location.hash.replace('#/', '').replace('#', '');
+  const saved = localStorage.getItem(VIEW_KEY) as View | null;
+  const views: View[] = ['dashboard', 'reports', 'add', 'debts', 'plan'];
+  if (views.includes(hash as View)) return hash as View;
+  if (saved && views.includes(saved)) return saved as View;
+  return 'dashboard';
+};
+
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [state, setState] = useState<AppState>(INITIAL_STATE);
+  const [currentView, setCurrentView] = useState<View>(getInitialView);
+  const [state, setState] = useState<AppState>(loadPersistedState);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
+  const [quickAddDraft, setQuickAddDraft] = useState<TransactionDraft | null>(null);
+  const [lastGeneration, setLastGeneration] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleAddTransactions = (newTx: Transaction[]) => {
-    // New transactions are added as 'paid' by default if they are quick added now, 
-    // or 'pending' if future date (QuickAdd simplified always adds now for this MVP)
-    const processedTx = newTx.map(t => ({
-      ...t,
-      status: 'paid' as const
-    }));
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.warn('Não foi possível salvar o estado localmente', error);
+    }
+  }, [state]);
 
-    setState(prev => ({
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.location.hash = `#/${currentView}`;
+    localStorage.setItem(VIEW_KEY, currentView);
+  }, [currentView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      const hash = window.location.hash.replace('#/', '').replace('#', '');
+      const views: View[] = ['dashboard', 'reports', 'add', 'debts', 'plan'];
+      if (views.includes(hash as View)) setCurrentView(hash as View);
+    };
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+      setShowInstallBanner(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler as any);
+    return () => window.removeEventListener('beforeinstallprompt', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const attemptSync = async () => {
+      if (!isOnline || isSyncing) return;
+      const pending = state.transactions.filter((t) => t.needsSync);
+      if (!pending.length) return;
+      setIsSyncing(true);
+      try {
+        const result = await syncTransactionsQueue(pending);
+        if (result.syncedIds.length) {
+          setState((prev) => ({
+            ...prev,
+            transactions: prev.transactions.map((t) =>
+              result.syncedIds.includes(t.id) ? { ...t, needsSync: false, status: t.status || 'paid' } : t
+            ),
+          }));
+          pushToast('Sincronizado com a API');
+        }
+      } catch (error) {
+        console.error('Erro ao sincronizar', error);
+        pushToast('Falha na sincronização. Tentaremos novamente.', 'error');
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+    attemptSync();
+  }, [isOnline, state.transactions, isSyncing]);
+
+  const pushToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2400);
+  };
+
+  const handleAddTransactions = (newTx: Transaction[], options?: { stayOnAdd?: boolean }) => {
+    const now = new Date();
+    const processedTx = newTx.map((t) => {
+      const txDate = new Date(t.date);
+      return {
+        ...t,
+        status: t.status || (txDate > now ? 'pending' : 'paid'),
+        needsSync: t.needsSync ?? !isOnline,
+      };
+    });
+
+    setState((prev) => ({
       ...prev,
-      transactions: [...prev.transactions, ...processedTx]
+      transactions: [...prev.transactions, ...processedTx],
     }));
-    setCurrentView('dashboard');
+
+    pushToast(isOnline ? 'Lançamento salvo' : 'Salvo offline. Sincroniza quando voltar à rede.');
+    if (!options?.stayOnAdd) {
+      setCurrentView('dashboard');
+      setQuickAddDraft(null);
+    }
   };
 
   const handleToggleStatus = (id: string) => {
     setState(prev => ({
       ...prev,
       transactions: prev.transactions.map(t => 
-        t.id === id ? { ...t, status: t.status === 'pending' ? 'paid' : 'pending' } : t
+        t.id === id ? { ...t, status: t.status === 'pending' ? 'paid' : 'pending', needsSync: t.needsSync || !isOnline } : t
       )
     }));
   };
@@ -61,6 +200,7 @@ const App: React.FC = () => {
   const handleGenerateNextMonth = () => {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthLabel = nextMonth.toLocaleDateString('pt-BR', { month: 'long' });
     
     // Simple logic: Copy all recurring transactions to next month
     const nextMonthTx = state.transactions
@@ -80,7 +220,9 @@ const App: React.FC = () => {
       ...prev,
       transactions: [...prev.transactions, ...nextMonthTx]
     }));
-    alert(`Gerado ${nextMonthTx.length} itens para o próximo mês.`);
+    const message = `Gerado ${nextMonthTx.length} itens para ${monthLabel}.`;
+    setLastGeneration(message);
+    pushToast(message);
     setCurrentView('dashboard');
   };
 
@@ -105,6 +247,34 @@ const App: React.FC = () => {
         categories: [...prev.categories, category].sort()
       }));
     }
+  };
+
+  const handleBudgetUpdate = (payload: { monthlyIncome?: number; variableCap?: number }) => {
+    setState((prev) => ({
+      ...prev,
+      monthlyIncome: payload.monthlyIncome ?? prev.monthlyIncome,
+      variableCap: payload.variableCap ?? prev.variableCap,
+    }));
+    pushToast('Planejamento atualizado');
+  };
+
+  const handleOpenQuickAddWithDraft = (draft: TransactionDraft) => {
+    setQuickAddDraft(draft);
+    setCurrentView('add');
+  };
+
+  const handleInstallClick = async () => {
+    if (!installPrompt?.prompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setShowInstallBanner(false);
+    pushToast(outcome === 'accepted' ? 'PWA instalado' : 'Instalação cancelada', outcome === 'accepted' ? 'success' : 'error');
+  };
+
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+    setInstallPrompt(null);
   };
 
   const NavButton = ({ view, icon: Icon, label, desktop }: { view: View, icon: any, label: string, desktop?: boolean }) => (
@@ -165,6 +335,24 @@ const App: React.FC = () => {
       {/* === MAIN CONTENT WRAPPER === */}
       <main className="flex-1 relative flex flex-col h-screen overflow-hidden bg-black md:bg-zinc-950/50">
         
+        {/* Network / generation signals */}
+        {!isOnline && (
+          <div className="px-4 py-2 text-xs bg-amber-500/10 text-amber-300 border-b border-amber-500/30 flex items-center gap-2">
+            <Icons.Alert size={14} /> Modo offline: novos lançamentos ficam pendentes para sincronizar.
+          </div>
+        )}
+        {isSyncing && (
+          <div className="px-4 py-2 text-xs bg-emerald-500/10 text-emerald-200 border-b border-emerald-500/30 flex items-center gap-2">
+            <Icons.Loader className="animate-spin" size={14} /> Sincronizando lançamentos...
+          </div>
+        )}
+        {lastGeneration && (
+          <div className="px-4 py-2 text-xs bg-emerald-500/10 text-emerald-200 border-b border-emerald-500/30 flex items-center justify-between">
+            <span>{lastGeneration}</span>
+            <button onClick={() => setLastGeneration(null)} className="text-emerald-400 hover:text-white text-[10px]">OK</button>
+          </div>
+        )}
+        
         {/* Mobile Header (Hidden on Desktop) */}
         {currentView !== 'add' && (
           <header className="md:hidden px-6 pt-6 pb-2 flex justify-between items-center bg-zinc-950/80 backdrop-blur sticky top-0 z-10 flex-shrink-0">
@@ -186,30 +374,52 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth">
             {/* Desktop Center Container - constrained for readability but wider than mobile */}
             <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
-                {currentView === 'dashboard' && <Dashboard state={state} onToggleStatus={handleToggleStatus} />}
-                {currentView === 'reports' && <Reports state={state} onGenerateNextMonth={handleGenerateNextMonth} />}
+                {currentView === 'dashboard' && (
+                  <Dashboard 
+                    state={state} 
+                    onToggleStatus={handleToggleStatus} 
+                    onQuickAddDraft={handleOpenQuickAddWithDraft}
+                    isOnline={isOnline}
+                  />
+                )}
+                {currentView === 'reports' && (
+                  <Reports 
+                    state={state} 
+                    onGenerateNextMonth={handleGenerateNextMonth} 
+                    onQuickAddDraft={handleOpenQuickAddWithDraft}
+                    onToast={pushToast}
+                  />
+                )}
                 {currentView === 'add' && (
                     <QuickAdd 
-                    onAdd={handleAddTransactions} 
-                    onCancel={() => setCurrentView('dashboard')} 
-                    availableCategories={state.categories}
-                    availableCards={state.debts}
-                    onAddCard={handleAddDebt}
+                      onAdd={handleAddTransactions} 
+                      onCancel={() => setCurrentView('dashboard')} 
+                      availableCategories={state.categories}
+                      availableCards={state.debts}
+                      onAddCard={handleAddDebt}
+                      draft={quickAddDraft}
+                      onClearDraft={() => setQuickAddDraft(null)}
+                      isOnline={isOnline}
+                      onToast={pushToast}
                     />
                 )}
                 {currentView === 'debts' && (
                     <Passivos 
-                    debts={state.debts} 
-                    onAddDebt={handleAddDebt}
-                    onUpdateDebt={handleUpdateDebt}
+                      debts={state.debts} 
+                      onAddDebt={handleAddDebt}
+                      onUpdateDebt={handleUpdateDebt}
+                      onQuickAddDraft={handleOpenQuickAddWithDraft}
                     />
                 )}
                 {currentView === 'plan' && (
                     <Planning 
-                    onGenerateNextMonth={handleGenerateNextMonth} 
-                    variableCap={state.variableCap} 
-                    categories={state.categories}
-                    onAddCategory={handleAddCategory}
+                      onGenerateNextMonth={handleGenerateNextMonth} 
+                      variableCap={state.variableCap} 
+                      monthlyIncome={state.monthlyIncome}
+                      categories={state.categories}
+                      onAddCategory={handleAddCategory}
+                      onBudgetChange={handleBudgetUpdate}
+                      lastGeneration={lastGeneration}
                     />
                 )}
             </div>
@@ -237,7 +447,33 @@ const App: React.FC = () => {
             </div>
           </nav>
         )}
+
+        {showInstallBanner && (
+          <div className="fixed bottom-24 right-4 left-4 md:left-auto md:w-80 bg-zinc-900 border border-emerald-500/30 rounded-2xl p-4 shadow-2xl z-50">
+            <div className="flex justify-between items-start gap-2">
+              <div>
+                <p className="text-sm font-bold text-white">Instale o Cockpit</p>
+                <p className="text-xs text-zinc-400">Acesso offline, full-screen e carregamento mais rápido.</p>
+              </div>
+              <button onClick={dismissInstallBanner} className="text-zinc-500 hover:text-white">
+                <Icons.Close size={14} />
+              </button>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleInstallClick} className="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-bold hover:bg-emerald-500">Instalar</button>
+              <button onClick={dismissInstallBanner} className="px-3 py-2 rounded-xl text-sm text-zinc-400 border border-zinc-800">Depois</button>
+            </div>
+          </div>
+        )}
       </main>
+      
+      {toast && (
+        <div className={`fixed bottom-6 right-4 left-4 md:left-auto md:w-72 p-3 rounded-xl shadow-2xl border text-sm ${
+          toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/40 text-rose-100' : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-100'
+        }`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 };

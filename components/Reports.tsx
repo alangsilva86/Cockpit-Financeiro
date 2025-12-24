@@ -1,18 +1,26 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, OperationType, Person, Transaction } from '../types';
+import { AppState, OperationType, PaymentMethod, Person, Transaction } from '../types';
 import { Icons } from './Icons';
+import { generateFinancialInsight } from '../services/geminiService';
+import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface ReportsProps {
   state: AppState;
   onGenerateNextMonth: () => void;
+  onQuickAddDraft?: (draft: Partial<Transaction>) => void;
+  onToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 type TimeTab = 'past' | 'present' | 'future';
 
-export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) => {
+export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, onQuickAddDraft, onToast }) => {
   const [activeTab, setActiveTab] = useState<TimeTab>('past');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0); // 0 = current, -1 = last month
   const [personFilter, setPersonFilter] = useState<Person | 'All'>('All');
+  const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | 'All'>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'paid' | 'pending'>('All');
+  const [insight, setInsight] = useState<string>('Conecte uma API Key para insights rápidos.');
+  const [loadingInsight, setLoadingInsight] = useState(false);
   
   // State for expandable details
   const [showLifeDetails, setShowLifeDetails] = useState(false);
@@ -35,9 +43,11 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
       const sameMonth = tDate.getMonth() === targetDate.getMonth() && 
                         tDate.getFullYear() === targetDate.getFullYear();
       const samePerson = personFilter === 'All' || t.person === personFilter;
-      return sameMonth && samePerson;
+      const samePayment = paymentFilter === 'All' || t.paymentMethod === paymentFilter;
+      const sameStatus = statusFilter === 'All' || t.status === statusFilter;
+      return sameMonth && samePerson && samePayment && sameStatus;
     });
-  }, [state.transactions, targetDate, personFilter]);
+  }, [state.transactions, targetDate, personFilter, paymentFilter, statusFilter]);
 
   // Aggregations
   const stats = useMemo(() => {
@@ -74,6 +84,24 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
           .sort((a, b) => b.amount - a.amount);
   }, [filteredData, stats.lifeCost]);
 
+  const lifeChartData = useMemo(() => lifeCostCategories.map((c) => ({ name: c.name, value: c.amount })), [lifeCostCategories]);
+
+  const monthlySeries = useMemo(() => {
+    const map: Record<string, { month: string; gasto: number; juros: number; order: number }> = {};
+    state.transactions.forEach((t) => {
+      const d = new Date(t.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!map[key]) {
+        map[key] = { month: d.toLocaleDateString('pt-BR', { month: 'short' }), gasto: 0, juros: 0, order: d.getFullYear() * 12 + d.getMonth() };
+      }
+      if (t.type === OperationType.JUROS) map[key].juros += t.amount;
+      if (t.type === OperationType.VIDA) map[key].gasto += t.amount;
+    });
+    return Object.values(map)
+      .sort((a, b) => a.order - b.order)
+      .map(({ order, ...rest }) => rest);
+  }, [state.transactions]);
+
   // Group by Type for List
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
@@ -87,6 +115,48 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
   const getPercentage = (val: number, total: number) => {
     if (total === 0) return 0;
     return Math.round((val / total) * 100);
+  };
+
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e', '#8b5cf6', '#22d3ee', '#a855f7'];
+
+  const handleInsight = async () => {
+    setLoadingInsight(true);
+    try {
+      const text = await generateFinancialInsight(filteredData, state.monthlyIncome);
+      setInsight(text);
+      onToast?.('Insight atualizado');
+    } catch (error) {
+      setInsight('Erro ao gerar insight.');
+      onToast?.('Erro ao gerar insight', 'error');
+    } finally {
+      setLoadingInsight(false);
+    }
+  };
+
+  const exportCSV = () => {
+    const header = 'data,descricao,valor,pessoa,tipo,categoria,status,pagamento';
+    const rows = filteredData.map(t => [
+      new Date(t.date).toISOString(),
+      `"${t.description}"`,
+      t.amount,
+      t.person,
+      t.type,
+      t.category,
+      t.status,
+      t.paymentMethod
+    ].join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cockpit-relatorio.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    window.print();
   };
 
   return (
@@ -151,6 +221,24 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
                {p === 'All' ? 'Todos' : p}
              </button>
            ))}
+           <select
+             value={paymentFilter}
+             onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
+             className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-full px-3 py-1"
+           >
+             {['All', 'Credit', 'Pix', 'Debit', 'Cash'].map((p) => (
+               <option key={p} value={p}>{p === 'All' ? 'Qualquer pagamento' : p}</option>
+             ))}
+           </select>
+           <select
+             value={statusFilter}
+             onChange={(e) => setStatusFilter(e.target.value as 'All' | 'paid' | 'pending')}
+             className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-full px-3 py-1"
+           >
+             <option value="All">Status</option>
+             <option value="paid">Pagos</option>
+             <option value="pending">Pendentes</option>
+           </select>
         </div>
 
         {/* === SUMMARY CARDS === */}
@@ -165,6 +253,71 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
              <span className="text-xl font-bold text-zinc-400 block">R$ {stats.totalPaid.toLocaleString()}</span>
              <span className="text-[10px] text-zinc-600">Inclui rolagens</span>
           </div>
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-xs text-zinc-400 uppercase font-bold">Custo de Vida por categoria</h4>
+              <span className="text-[10px] text-zinc-500">{lifeChartData.length} itens</span>
+            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={lifeChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} paddingAngle={4}>
+                  {lifeChartData.map((entry, index) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-xs text-zinc-400 uppercase font-bold">Linha do tempo de gastos</h4>
+              <div className="flex gap-2 text-[10px] text-zinc-500">
+                <span className="text-blue-400">Vida</span>
+                <span className="text-rose-400">Juros</span>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlySeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis dataKey="month" stroke="#a1a1aa" fontSize={10} />
+                <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+                <Line type="monotone" dataKey="gasto" stroke="#38bdf8" strokeWidth={2} />
+                <Line type="monotone" dataKey="juros" stroke="#f43f5e" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Exports and insights */}
+        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={exportCSV}
+              className="px-3 py-2 bg-zinc-800 rounded-lg text-xs font-bold text-white border border-zinc-700 hover:bg-zinc-700"
+            >
+              Exportar CSV
+            </button>
+            <button 
+              onClick={exportPDF}
+              className="px-3 py-2 bg-zinc-800 rounded-lg text-xs font-bold text-white border border-zinc-700 hover:bg-zinc-700"
+            >
+              PDF/Imprimir
+            </button>
+            <button 
+              onClick={handleInsight}
+              disabled={loadingInsight}
+              className="px-3 py-2 bg-emerald-600 rounded-lg text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {loadingInsight ? 'Gerando...' : 'Insight IA'}
+            </button>
+          </div>
+          <p className="text-sm text-zinc-300 leading-snug">{insight}</p>
         </div>
 
         {/* === BREAKDOWN VISUALIZATION === */}
@@ -269,7 +422,21 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth }) 
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-mono text-zinc-300">R$ {t.amount.toLocaleString()}</span>
-                        <button className="text-zinc-600 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100">
+                        <button 
+                          className="text-zinc-600 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
+                          onClick={() => onQuickAddDraft?.({
+                            amount: t.amount,
+                            description: t.description,
+                            category: t.category,
+                            type: t.type,
+                            paymentMethod: t.paymentMethod,
+                            cardId: t.cardId,
+                            person: t.person,
+                            status: 'paid',
+                            date: new Date().toISOString()
+                          })}
+                          title="Relançar/ajustar este item"
+                        >
                           <Icons.Edit size={14} />
                         </button>
                       </div>

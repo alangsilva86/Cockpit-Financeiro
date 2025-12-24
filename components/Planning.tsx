@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icons } from './Icons';
 
 interface PlanningProps {
   onGenerateNextMonth: () => void;
   variableCap: number;
+  monthlyIncome: number;
   categories: string[];
   onAddCategory: (cat: string) => void;
+  onBudgetChange: (payload: { monthlyIncome?: number; variableCap?: number }) => void;
+  lastGeneration?: string | null;
 }
 
-export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap, categories, onAddCategory }) => {
+export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variableCap, monthlyIncome, categories, onAddCategory, onBudgetChange, lastGeneration }) => {
   const [newCat, setNewCat] = useState('');
   const [isAddingCat, setIsAddingCat] = useState(false);
+  const [localIncome, setLocalIncome] = useState(monthlyIncome);
+  const [localVariableCap, setLocalVariableCap] = useState(variableCap);
 
   const handleAddCat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +25,11 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
       setIsAddingCat(false);
     }
   };
+
+  useEffect(() => {
+    setLocalIncome(monthlyIncome);
+    setLocalVariableCap(variableCap);
+  }, [monthlyIncome, variableCap]);
 
   return (
     <div className="p-4 space-y-6 animate-in fade-in">
@@ -53,19 +63,46 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
           <Icons.Calendar size={18} />
           Gerar Roteiro de Fevereiro
         </button>
+        {lastGeneration && (
+          <p className="text-[10px] text-blue-200 mt-2">{lastGeneration}</p>
+        )}
       </div>
 
       {/* Caps */}
       <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800">
         <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider mb-4">Limites e Tetos</h3>
-        
-        <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-           <span className="text-zinc-200">Teto Variável (Lazer/Mercado)</span>
-           <span className="font-mono text-emerald-400 font-bold">R$ {variableCap.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between items-center py-2 pt-4">
-           <span className="text-zinc-200">Renda Recorrente</span>
-           <span className="font-mono text-white font-bold">R$ 25.000</span>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-zinc-400 uppercase font-bold">Renda Recorrente (R$)</label>
+            <input 
+              type="number" 
+              value={localIncome}
+              onChange={(e) => setLocalIncome(parseFloat(e.target.value) || 0)}
+              className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <div className="flex justify-between text-xs text-zinc-400 uppercase font-bold">
+              <span>Teto Variável</span>
+              <span className="text-emerald-400 font-mono">R$ {localVariableCap.toLocaleString()}</span>
+            </div>
+            <input 
+              type="range" 
+              min={0} 
+              max={Math.max(localIncome, variableCap, 5000)} 
+              step={500}
+              value={localVariableCap}
+              onChange={(e) => setLocalVariableCap(parseFloat(e.target.value) || 0)}
+              className="w-full mt-2 accent-emerald-500"
+            />
+            <p className="text-[10px] text-zinc-500 mt-1">Use como semáforo do mês (mercado, lazer, compras).</p>
+          </div>
+          <button 
+            onClick={() => onBudgetChange({ monthlyIncome: localIncome, variableCap: localVariableCap })}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95"
+          >
+            Salvar ajustes
+          </button>
         </div>
       </div>
 

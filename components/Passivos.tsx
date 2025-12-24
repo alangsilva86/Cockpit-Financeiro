@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { Debt } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Debt, OperationType, Person, TransactionDraft } from '../types';
 import { Icons } from './Icons';
 
 interface PassivosProps {
   debts: Debt[];
   onAddDebt?: (debt: Debt) => void;
   onUpdateDebt?: (debt: Debt) => void;
+  onQuickAddDraft?: (draft: TransactionDraft) => void;
 }
 
-export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDebt }) => {
+export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDebt, onQuickAddDraft }) => {
   const [showSim, setShowSim] = useState(false);
   const [liquidity, setLiquidity] = useState(300000);
   
@@ -69,6 +70,27 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
       return 'bg-blue-500';
   };
 
+  const orderedDebts = useMemo(() => {
+    return [...debts].sort((a, b) => {
+      const dueDiff = parseInt(a.dueDate) - parseInt(b.dueDate);
+      if (dueDiff !== 0) return dueDiff;
+      return b.rolloverCost - a.rolloverCost;
+    });
+  }, [debts]);
+
+  const avalanchePlan = useMemo(() => {
+    return [...debts].sort((a, b) => b.rolloverCost - a.rolloverCost).map(d => d.name);
+  }, [debts]);
+
+  const daysToDue = (dueDate: string) => {
+    const now = new Date();
+    const target = new Date();
+    target.setHours(0, 0, 0, 0);
+    target.setDate(parseInt(dueDate));
+    if (target < now) target.setMonth(target.getMonth() + 1);
+    return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
   return (
     <div className="p-4 space-y-6 animate-in slide-in-from-right duration-300 pb-24">
       
@@ -127,6 +149,19 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
         </button>
       </div>
 
+      {/* Avalanche suggestion */}
+      <div className="bg-zinc-900 p-3 rounded-xl border border-zinc-800">
+        <div className="text-[10px] text-zinc-500 uppercase font-bold mb-2">Ordem sugerida (avalanche)</div>
+        <div className="flex flex-wrap gap-2">
+          {avalanchePlan.map((name, idx) => (
+            <span key={name} className="px-3 py-1 rounded-full text-[10px] border border-zinc-800 bg-zinc-800/50 text-zinc-300">
+              {idx + 1}. {name}
+            </span>
+          ))}
+          {avalanchePlan.length === 0 && <span className="text-xs text-zinc-500">Sem dívidas cadastradas.</span>}
+        </div>
+      </div>
+
       {/* Edit Form Modal/Overlay */}
       {isEditing && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -170,7 +205,10 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
 
       {/* Debt List */}
       <div className="space-y-4">
-        {debts.map(debt => (
+        {orderedDebts.map(debt => {
+          const dueIn = daysToDue(debt.dueDate);
+          const suggestedPayment = debt.currentInvoice || debt.minPayment || debt.balance;
+          return (
           <div key={debt.id} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 relative group overflow-hidden">
             
             {/* Visual Danger Indicator (Top Border) */}
@@ -188,7 +226,7 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
             <div className="flex justify-between items-start mb-4">
               <div>
                 <span className="font-bold text-white text-lg block">{debt.name}</span>
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vence dia {debt.dueDate}</span>
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vence dia {debt.dueDate} · {dueIn} dias</span>
               </div>
             </div>
 
@@ -227,9 +265,28 @@ export const Passivos: React.FC<PassivosProps> = ({ debts, onAddDebt, onUpdateDe
                  <span className="text-[10px] text-zinc-600">Saldo Devedor Total</span>
                  <span className="text-xs text-zinc-400 font-mono">R$ {debt.balance.toLocaleString()}</span>
             </div>
+            <div className="mt-4 flex justify-between items-center gap-3">
+              <span className="text-[10px] text-zinc-500">Prioridade: {debt.rolloverCost}% · pagar pelo menos R$ {debt.minPayment.toLocaleString()}</span>
+              <button 
+                onClick={() => onQuickAddDraft?.({
+                  amount: suggestedPayment,
+                  description: `Pagamento ${debt.name}`,
+                  category: 'Dívida',
+                  type: OperationType.DIVIDA,
+                  paymentMethod: 'Pix',
+                  person: Person.ALAN,
+                  status: 'paid',
+                  date: new Date().toISOString()
+                })}
+                className="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg font-bold transition-colors"
+              >
+                Registrar pagamento
+              </button>
+            </div>
 
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
