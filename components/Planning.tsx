@@ -32,9 +32,9 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
     const expenses = transactions.filter((t) => (t.competenceMonth || competenceFromDate(new Date(t.date))) === nextCompetence && t.kind === 'expense');
     const creditByCard = cards.map((card) => {
       const cardTx = expenses.filter((t) => t.paymentMethod === 'credit' && t.cardId === card.id);
-      return { card, total: cardTx.reduce((acc, t) => acc + t.amount, 0) };
+      return { card, total: cardTx.reduce((acc, t) => acc + Number(t.amount || 0), 0) };
     });
-    const variableSpend = expenses.reduce((acc, t) => acc + t.amount, 0);
+    const variableSpend = expenses.reduce((acc, t) => acc + Number(t.amount || 0), 0);
     return { creditByCard, variableSpend };
   }, [transactions, cards, nextCompetence]);
 
@@ -116,6 +116,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
             <label className="text-xs text-zinc-400 uppercase font-bold">Renda Recorrente (R$)</label>
             <input 
               type="number" 
+              inputMode="decimal"
               value={localIncome}
               onChange={(e) => setLocalIncome(parseFloat(e.target.value) || 0)}
               className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"

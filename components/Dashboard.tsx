@@ -34,6 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
   // 1. Filter Current Month Data
   const monthData = useMemo(() => {
     return state.transactions.filter(t => {
+      if (t.deleted) return false;
       const matchesMonth = (t.competenceMonth || '').startsWith(competence) || (new Date(t.date).getMonth() === currentMonth && new Date(t.date).getFullYear() === currentYear);
       const matchesPerson = personFilter === 'All' || t.personId === personFilter;
       const matchesCategory = categoryFilter === 'All' || t.categoryId === categoryFilter;

@@ -1,27 +1,31 @@
-import { Transaction } from '../types';
+import { AppState } from '../types';
 
-const SYNC_URL = import.meta.env.VITE_SYNC_ENDPOINT || 'https://httpbin.org/post';
+const SYNC_URL = import.meta.env.VITE_SYNC_ENDPOINT || '/api/sync';
+const WORKSPACE_ID = import.meta.env.VITE_SYNC_WORKSPACE || 'default';
+const SYNC_KEY = import.meta.env.VITE_SYNC_KEY;
 
-export interface SyncResult {
-  syncedIds: string[];
+export interface SyncResponse {
+  state: AppState;
+  serverUpdatedAt: string;
 }
 
-export const syncTransactionsQueue = async (transactions: Transaction[]): Promise<SyncResult> => {
-  const queue = transactions.filter((t) => t.needsSync);
-  if (!queue.length) return { syncedIds: [] };
+export const syncAppState = async (state: AppState): Promise<SyncResponse> => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     throw new Error('offline');
   }
 
   const response = await fetch(SYNC_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transactions: queue }),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(SYNC_KEY ? { 'x-sync-key': SYNC_KEY } : {}),
+    },
+    body: JSON.stringify({ workspaceId: WORKSPACE_ID, state }),
   });
 
   if (!response.ok) {
     throw new Error(`sync failed with status ${response.status}`);
   }
 
-  return { syncedIds: queue.map((t) => t.id) };
+  return (await response.json()) as SyncResponse;
 };

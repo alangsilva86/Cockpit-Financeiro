@@ -14,8 +14,7 @@ self.addEventListener('install', (event) => {
         try {
           await cache.add(asset);
         } catch (err) {
-          // Ignore failures (e.g., navigation requests) to avoid aborting install
-          console.warn('SW precache skip', asset, err);
+          // Ignore failures (e.g., offline during install) to avoid aborting install
         }
       }
     }).then(() => self.skipWaiting())

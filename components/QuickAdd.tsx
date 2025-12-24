@@ -78,6 +78,7 @@ const buildInstallments = (
   const plan: InstallmentPlan = {
     id: planId,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     description: base.description,
     personId: base.personId,
     categoryId: base.categoryId || '',
@@ -318,6 +319,8 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
       tags: [],
       needsSync: !isOnline,
       isRecurring: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     const transactions: Transaction[] = [];

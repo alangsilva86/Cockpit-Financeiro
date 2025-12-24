@@ -43,6 +43,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   // Filter Data
   const filteredData = useMemo(() => {
     return state.transactions.filter(t => {
+      if (t.deleted) return false;
       const tDate = new Date(t.date);
       const comp = t.competenceMonth || `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
       const sameMonth = comp === `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
@@ -92,6 +93,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   const monthlySeries = useMemo(() => {
     const map: Record<string, { month: string; gasto: number; juros: number; order: number }> = {};
     state.transactions.forEach((t) => {
+      if (t.deleted) return;
       const d = new Date(t.date);
       const comp = t.competenceMonth || `${d.getFullYear()}-${d.getMonth() + 1}`;
       const key = comp;
@@ -125,21 +127,30 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e', '#8b5cf6', '#22d3ee', '#a855f7'];
 
   const plansView = useMemo(() => {
-    return (state.installmentPlans || []).map((plan) => {
-      const related = state.transactions.filter((t) => t.installment?.groupId === plan.id);
-      const pending = related.filter((t) => t.status === 'pending').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      return {
-        plan,
-        remaining: pending.length,
-        nextDate: pending[0]?.date,
-        totalGenerated: related.length,
-      };
-    });
+    return (state.installmentPlans || [])
+      .filter((plan) => !plan.deleted && plan.status !== 'cancelled')
+      .map((plan) => {
+        const related = state.transactions.filter((t) => t.installment?.groupId === plan.id && !t.deleted);
+        const pending = related.filter((t) => t.status === 'pending').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        return {
+          plan,
+          remaining: pending.length,
+          nextDate: pending[0]?.date,
+          totalGenerated: related.length,
+        };
+      });
   }, [state.installmentPlans, state.transactions]);
 
   const handleCancelPlan = (planId: string) => {
-    const updatedPlans = state.installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled' } : p));
-    const updatedTx = state.transactions.filter((t) => !(t.installment?.groupId === planId && t.status === 'pending'));
+    const now = new Date().toISOString();
+    const updatedPlans = state.installmentPlans.map((p) =>
+      p.id === planId ? { ...p, status: 'cancelled', updatedAt: now } : p
+    );
+    const updatedTx = state.transactions.map((t) =>
+      t.installment?.groupId === planId && t.status === 'pending'
+        ? { ...t, deleted: true, updatedAt: now, needsSync: true }
+        : t
+    );
     onUpdateInstallments?.(updatedPlans, updatedTx);
     onToast?.('Parcelas futuras canceladas');
   };
@@ -374,9 +385,9 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 </button>
                 <button
                   onClick={() => onUpdateInstallments?.(
-                    state.installmentPlans.map((p) => p.id === installmentPlan.id ? { ...p, status: 'finished', remainingInstallments: 0 } : p),
+                    state.installmentPlans.map((p) => p.id === installmentPlan.id ? { ...p, status: 'finished', remainingInstallments: 0, updatedAt: new Date().toISOString() } : p),
                     state.transactions.map((t) => t.installment?.groupId === installmentPlan.id && t.status === 'pending'
-                      ? { ...t, status: 'paid', date: new Date().toISOString(), competenceMonth: t.competenceMonth || '', needsSync: true }
+                      ? { ...t, status: 'paid', date: new Date().toISOString(), competenceMonth: t.competenceMonth || '', needsSync: true, updatedAt: new Date().toISOString() }
                       : t)
                   )}
                   disabled={!onUpdateInstallments}

@@ -38,12 +38,16 @@ export interface Transaction {
   tags?: string[];
   installment?: InstallmentInfo;
   isRecurring?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deleted?: boolean;
   needsSync?: boolean;
 }
 
 export interface InstallmentPlan {
   id: string;
   createdAt: string;
+  updatedAt?: string;
   description: string;
   personId?: PersonId;
   categoryId: string;
@@ -56,6 +60,7 @@ export interface InstallmentPlan {
   status: 'active' | 'finished' | 'cancelled';
   remainingInstallments: number;
   notes?: string;
+  deleted?: boolean;
 }
 
 export interface Card {
@@ -66,6 +71,9 @@ export interface Card {
   aprMonthly?: number;
   limit?: number;
   balance?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  deleted?: boolean;
 }
 
 export interface AppState {
@@ -76,6 +84,7 @@ export interface AppState {
   monthlyIncome: number;
   variableCap: number;
   installmentPlans: InstallmentPlan[];
+  updatedAt?: string;
 }
 
 export type View = 'dashboard' | 'add' | 'plan' | 'debts' | 'reports';

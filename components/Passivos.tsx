@@ -74,23 +74,29 @@ export const Passivos: React.FC<PassivosProps> = ({
       const totalCharges = charges.reduce((acc, t) => acc + getAmt(t), 0);
       const totalPayments = payments.reduce((acc, t) => acc + getAmt(t), 0);
       const remaining = totalCharges - totalPayments;
-      const relatedPlans = installmentPlans.filter((p) => p.cardId === card.id && p.status === 'active');
+      const relatedPlans = installmentPlans.filter((p) => p.cardId === card.id && p.status === 'active' && !p.deleted);
       return { card, totalCharges, totalPayments, remaining, charges, payments, relatedPlans };
     });
   }, [cards, transactions, installmentPlans, selectedMonth]);
 
   const handleCancelPlan = (planId: string) => {
-    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled' } : p));
-    const updatedTx = transactions.filter((t) => !(t.installment?.groupId === planId && t.status === 'pending'));
+    const now = new Date().toISOString();
+    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'cancelled', updatedAt: now } : p));
+    const updatedTx = transactions.map((t) =>
+      t.installment?.groupId === planId && t.status === 'pending'
+        ? { ...t, deleted: true, updatedAt: now, needsSync: true }
+        : t
+    );
     onUpdateInstallments(updatedPlans, updatedTx);
   };
 
   const handleFinishPlan = (planId: string) => {
     const now = new Date();
-    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'finished', remainingInstallments: 0 } : p));
+    const nowIso = now.toISOString();
+    const updatedPlans = installmentPlans.map((p) => (p.id === planId ? { ...p, status: 'finished', remainingInstallments: 0, updatedAt: nowIso } : p));
     const updatedTx = transactions.map((t) =>
       t.installment?.groupId === planId && t.status === 'pending'
-        ? { ...t, status: 'paid', date: now.toISOString(), competenceMonth: competenceString(now), needsSync: true }
+        ? { ...t, status: 'paid', date: nowIso, competenceMonth: competenceString(now), needsSync: true, updatedAt: nowIso }
         : t
     );
     onUpdateInstallments(updatedPlans, updatedTx);
@@ -238,12 +244,16 @@ export const Passivos: React.FC<PassivosProps> = ({
                   <input 
                       className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
                       placeholder="Fechamento"
+                      type="number"
+                      inputMode="numeric"
                       value={formClosing}
                       onChange={e => setFormClosing(e.target.value)}
                   />
                   <input 
                       className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
                       placeholder="Vencimento"
+                      type="number"
+                      inputMode="numeric"
                       value={formDue}
                       onChange={e => setFormDue(e.target.value)}
                   />
@@ -252,6 +262,7 @@ export const Passivos: React.FC<PassivosProps> = ({
                     className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
                     placeholder="Juros mês (%)"
                     type="number"
+                    inputMode="decimal"
                     value={formApr}
                     onChange={e => setFormApr(e.target.value)}
                 />

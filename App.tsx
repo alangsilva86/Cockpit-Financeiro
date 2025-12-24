@@ -5,9 +5,9 @@ import { Passivos } from './components/Passivos';
 import { Planning } from './components/Planning';
 import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
-import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft } from './types';
+import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/categories';
-import { syncTransactionsQueue } from './services/syncService';
+import { syncAppState } from './services/syncService';
 
 const SCHEMA_VERSION = 2;
 
@@ -16,6 +16,8 @@ const deriveCompetence = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const nowIso = () => new Date().toISOString();
+
 // Initial Mock Data adapted ao novo modelo
 const INITIAL_STATE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -23,11 +25,12 @@ const INITIAL_STATE: AppState = {
   variableCap: 7500, // 30% of income rule
   categories: INITIAL_CATEGORIES,
   cards: [
-    { id: 'd1', name: 'Nubank Black', dueDay: 5, closingDay: 28, aprMonthly: 14, limit: 20000 },
-    { id: 'd2', name: 'XP Infinite', dueDay: 15, closingDay: 5, aprMonthly: 8, limit: 30000 },
+    { id: 'd1', name: 'Nubank Black', dueDay: 5, closingDay: 28, aprMonthly: 14, limit: 20000, createdAt: nowIso(), updatedAt: nowIso() },
+    { id: 'd2', name: 'XP Infinite', dueDay: 15, closingDay: 5, aprMonthly: 8, limit: 30000, createdAt: nowIso(), updatedAt: nowIso() },
   ],
   installmentPlans: [],
   transactions: [],
+  updatedAt: nowIso(),
 };
 
 const STORAGE_KEY = 'cockpit-state-v2';
@@ -35,11 +38,36 @@ const VIEW_KEY = 'cockpit-view';
 
 const normalizeTransaction = (tx: Transaction): Transaction => {
   const status: Transaction['status'] = tx.status || (new Date(tx.date) > new Date() ? 'pending' : 'paid');
+  const createdAt = tx.createdAt || tx.date || nowIso();
+  const updatedAt = tx.updatedAt || createdAt;
   return {
     ...tx,
     competenceMonth: tx.competenceMonth || deriveCompetence(tx.date),
     status,
     needsSync: tx.needsSync ?? false,
+    createdAt,
+    updatedAt,
+    deleted: tx.deleted ?? false,
+  };
+};
+
+const normalizeCard = (card: Card): Card => {
+  const createdAt = card.createdAt || nowIso();
+  return {
+    ...card,
+    createdAt,
+    updatedAt: card.updatedAt || createdAt,
+    deleted: card.deleted ?? false,
+  };
+};
+
+const normalizePlan = (plan: InstallmentPlan): InstallmentPlan => {
+  const createdAt = plan.createdAt || nowIso();
+  return {
+    ...plan,
+    createdAt,
+    updatedAt: plan.updatedAt || createdAt,
+    deleted: plan.deleted ?? false,
   };
 };
 
@@ -87,8 +115,9 @@ const migrateState = (raw: LegacyState): AppState => {
       ...INITIAL_STATE,
       ...raw,
       transactions: (raw.transactions || []).map(normalizeTransaction),
-      installmentPlans: raw.installmentPlans || [],
-      cards: raw.cards || [],
+      installmentPlans: (raw.installmentPlans || []).map(normalizePlan),
+      cards: (raw.cards || []).map(normalizeCard),
+      updatedAt: raw.updatedAt || nowIso(),
     };
   }
 
@@ -100,17 +129,20 @@ const migrateState = (raw: LegacyState): AppState => {
       dueDay: d.dueDate ? parseInt(d.dueDate, 10) : undefined,
       aprMonthly: d.rolloverCost,
       limit: d.balance,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
     })) || [];
 
   return {
     ...INITIAL_STATE,
     schemaVersion: SCHEMA_VERSION,
-    transactions: legacyTx,
-    cards: legacyCards.length ? legacyCards : INITIAL_STATE.cards,
+    transactions: legacyTx.map(normalizeTransaction),
+    cards: (legacyCards.length ? legacyCards : INITIAL_STATE.cards).map(normalizeCard),
     categories: raw.categories || INITIAL_CATEGORIES,
     monthlyIncome: raw.monthlyIncome ?? INITIAL_STATE.monthlyIncome,
     variableCap: raw.variableCap ?? INITIAL_STATE.variableCap,
-    installmentPlans: raw.installmentPlans || [],
+    installmentPlans: (raw.installmentPlans || []).map(normalizePlan),
+    updatedAt: raw.updatedAt || nowIso(),
   };
 };
 
@@ -149,6 +181,7 @@ const App: React.FC = () => {
   const [lastGeneration, setLastGeneration] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [swUpdateReady, setSwUpdateReady] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number>(0);
 
   useEffect(() => {
     try {
@@ -202,21 +235,25 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!isOnline) return;
+    let mounted = true;
+
     const attemptSync = async () => {
-      if (!isOnline || isSyncing) return;
-      const pending = state.transactions.filter((t) => t.needsSync);
-      if (!pending.length) return;
+      if (!mounted || isSyncing) return;
+      const now = Date.now();
+      if (now - lastSyncAt < 3000) return;
       setIsSyncing(true);
       try {
-        const result = await syncTransactionsQueue(pending);
-        if (result.syncedIds.length) {
-          setState((prev) => ({
-            ...prev,
-            transactions: prev.transactions.map((t) =>
-              result.syncedIds.includes(t.id) ? { ...t, needsSync: false, status: t.status || 'paid' } : t
-            ),
-          }));
-          pushToast('Sincronizado com a API');
+        const result = await syncAppState(state);
+        if (result?.state) {
+          setState({
+            ...result.state,
+            transactions: result.state.transactions.map(normalizeTransaction),
+            cards: result.state.cards.map(normalizeCard),
+            installmentPlans: result.state.installmentPlans.map(normalizePlan),
+          });
+          setLastSyncAt(Date.now());
+          pushToast('Sincronizado com a nuvem');
         }
       } catch (error) {
         console.error('Erro ao sincronizar', error);
@@ -225,8 +262,22 @@ const App: React.FC = () => {
         setIsSyncing(false);
       }
     };
+
     attemptSync();
-  }, [isOnline, state.transactions, isSyncing]);
+    const interval = setInterval(attemptSync, 20000);
+    const visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        attemptSync();
+      }
+    };
+    window.addEventListener('visibilitychange', visibilityHandler);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', visibilityHandler);
+    };
+  }, [isOnline, isSyncing, state.updatedAt, lastSyncAt]);
 
   const pushToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -240,18 +291,23 @@ const App: React.FC = () => {
     const now = new Date();
     const processedTx = newTx.map((t) => {
       const txDate = new Date(t.date);
+      const createdAt = t.createdAt || nowIso();
+      const updatedAt = t.updatedAt || createdAt;
       return {
         ...t,
         competenceMonth: t.competenceMonth || deriveCompetence(t.date),
         status: t.status || (txDate > now ? 'pending' : 'paid'),
         needsSync: t.needsSync ?? !isOnline,
+        createdAt,
+        updatedAt,
       };
     });
 
     setState((prev) => ({
       ...prev,
       transactions: [...prev.transactions, ...processedTx],
-      installmentPlans: options?.newPlan ? [...prev.installmentPlans, options.newPlan] : prev.installmentPlans,
+      installmentPlans: options?.newPlan ? [...prev.installmentPlans, normalizePlan({ ...options.newPlan, updatedAt: nowIso() })] : prev.installmentPlans,
+      updatedAt: nowIso(),
     }));
 
     pushToast(isOnline ? 'Lançamento salvo' : 'Salvo offline. Sincroniza quando voltar à rede.');
@@ -265,8 +321,9 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       transactions: prev.transactions.map(t => 
-        t.id === id ? { ...t, status: t.status === 'pending' ? 'paid' : 'pending', needsSync: t.needsSync || !isOnline } : t
-      )
+        t.id === id ? { ...t, status: t.status === 'pending' ? 'paid' : 'pending', needsSync: t.needsSync || !isOnline, updatedAt: nowIso() } : t
+      ),
+      updatedAt: nowIso(),
     }));
   };
 
@@ -286,13 +343,16 @@ const App: React.FC = () => {
           id: Math.random().toString(36).substr(2, 9),
           date: d.toISOString(),
           competenceMonth: deriveCompetence(d.toISOString()),
-          status: 'pending' as const
+          status: 'pending' as const,
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
         };
       });
 
     setState(prev => ({
       ...prev,
-      transactions: [...prev.transactions, ...nextMonthTx]
+      transactions: [...prev.transactions, ...nextMonthTx.map(normalizeTransaction)],
+      updatedAt: nowIso(),
     }));
     const message = `Gerado ${nextMonthTx.length} itens para ${monthLabel}.`;
     setLastGeneration(message);
@@ -303,14 +363,16 @@ const App: React.FC = () => {
   const handleAddCard = (card: Card) => {
     setState(prev => ({
       ...prev,
-      cards: [...prev.cards, card]
+      cards: [...prev.cards, normalizeCard({ ...card, updatedAt: nowIso() })],
+      updatedAt: nowIso(),
     }));
   };
 
   const handleUpdateCard = (updatedCard: Card) => {
     setState(prev => ({
       ...prev,
-      cards: prev.cards.map(d => d.id === updatedCard.id ? updatedCard : d)
+      cards: prev.cards.map(d => d.id === updatedCard.id ? normalizeCard({ ...updatedCard, updatedAt: nowIso() }) : d),
+      updatedAt: nowIso(),
     }));
   };
 
@@ -318,7 +380,8 @@ const App: React.FC = () => {
     if (!state.categories.includes(category)) {
       setState(prev => ({
         ...prev,
-        categories: [...prev.categories, category].sort()
+        categories: [...prev.categories, category].sort(),
+        updatedAt: nowIso(),
       }));
     }
   };
@@ -328,6 +391,7 @@ const App: React.FC = () => {
       ...prev,
       monthlyIncome: payload.monthlyIncome ?? prev.monthlyIncome,
       variableCap: payload.variableCap ?? prev.variableCap,
+      updatedAt: nowIso(),
     }));
     pushToast('Planejamento atualizado');
   };
@@ -470,7 +534,7 @@ const App: React.FC = () => {
                       onAdd={handleAddTransactions} 
                       onCancel={() => setCurrentView('dashboard')} 
                       availableCategories={state.categories}
-                      availableCards={state.cards}
+                      availableCards={state.cards.filter((c) => !c.deleted)}
                       onAddCard={handleAddCard}
                       draft={quickAddDraft}
                       onClearDraft={() => setQuickAddDraft(null)}
@@ -480,9 +544,9 @@ const App: React.FC = () => {
                 )}
                 {currentView === 'debts' && (
                     <Passivos 
-                      cards={state.cards} 
-                      transactions={state.transactions}
-                      installmentPlans={state.installmentPlans}
+                      cards={state.cards.filter((c) => !c.deleted)} 
+                      transactions={state.transactions.filter((t) => !t.deleted)}
+                      installmentPlans={state.installmentPlans.filter((p) => !p.deleted)}
                       onAddCard={handleAddCard}
                       onUpdateCard={handleUpdateCard}
                       onUpdateInstallments={(plans, txs) => setState((prev) => ({ ...prev, installmentPlans: plans, transactions: txs }))}
@@ -498,8 +562,8 @@ const App: React.FC = () => {
                       onAddCategory={handleAddCategory}
                       onBudgetChange={handleBudgetUpdate}
                       lastGeneration={lastGeneration}
-                      transactions={state.transactions}
-                      cards={state.cards}
+                      transactions={state.transactions.filter((t) => !t.deleted)}
+                      cards={state.cards.filter((c) => !c.deleted)}
                     />
                 )}
             </div>

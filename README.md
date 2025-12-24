@@ -17,6 +17,13 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LIxzL7o0UetRiHgSRL7seU
    `npm install`
 2. Opcional: configure variáveis de ambiente:
    - `VITE_SYNC_ENDPOINT` (URL que receberá os lançamentos para sincronização; fallback httpbin)
+   - `VITE_SYNC_WORKSPACE` (namespace compartilhado entre dispositivos)
+   - `VITE_SYNC_KEY` (opcional, chave simples enviada ao backend)
+   - `SYNC_SHARED_KEY` (opcional, validado no backend do sync)
+   - `SUPABASE_URL` (server-side)
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-side, **não** vai para o bundle)
+   - `SUPABASE_SYNC_SCHEMA` (opcional, default `public`)
+   - `SUPABASE_SYNC_TABLE` (opcional, default `app_states`)
    - `AI_PROVIDER` (none|openai|... — default `none`)
    - `OPENAI_API_KEY` (apenas no backend, não é injetado no bundle)
 3. Execute:
@@ -25,3 +32,15 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LIxzL7o0UetRiHgSRL7seU
 ## IA agnóstica
 - O frontend usa `services/aiClient.ts` para chamar `/api/ai/suggest-category`, `/api/ai/parse-receipt` e `/api/ai/insight`.
 - O backend seleciona provider via `AI_PROVIDER` (default `none`). Nenhuma API key é embutida no bundle.
+
+## Sync multi-dispositivo
+- O frontend chama `/api/sync` e compartilha o estado por `VITE_SYNC_WORKSPACE`.
+- Para produção, configure Supabase (server-side) e `SYNC_SHARED_KEY` opcional para proteger gravações.
+- Tabela esperada (SQL):
+```sql
+create table if not exists public.app_states (
+  workspace_id text primary key,
+  state jsonb not null,
+  updated_at timestamptz not null default now()
+);
+```
