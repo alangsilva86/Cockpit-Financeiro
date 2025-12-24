@@ -107,24 +107,67 @@ const App: React.FC = () => {
     }
   };
 
-  const NavButton = ({ view, icon: Icon, label }: { view: View, icon: any, label: string }) => (
+  const NavButton = ({ view, icon: Icon, label, desktop }: { view: View, icon: any, label: string, desktop?: boolean }) => (
     <button 
       onClick={() => setCurrentView(view)}
-      className={`flex flex-col items-center justify-center w-full py-1 space-y-1 ${currentView === view ? 'text-emerald-500' : 'text-zinc-500 hover:text-zinc-300'}`}
+      className={`
+        flex items-center transition-all duration-200
+        ${desktop 
+            ? `w-full px-4 py-3 rounded-xl gap-3 mb-2 hover:bg-zinc-900 ${currentView === view ? 'bg-zinc-900 text-emerald-400 border border-zinc-800' : 'text-zinc-500'}`
+            : `flex-col justify-center w-full py-1 space-y-1 ${currentView === view ? 'text-emerald-500' : 'text-zinc-500 hover:text-zinc-300'}`
+        }
+      `}
     >
-      <Icon size={20} strokeWidth={currentView === view ? 2.5 : 2} />
-      <span className="text-[10px] font-medium">{label}</span>
+      <Icon size={desktop ? 20 : 20} strokeWidth={currentView === view ? 2.5 : 2} />
+      <span className={`${desktop ? 'text-sm font-bold' : 'text-[10px] font-medium'}`}>{label}</span>
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-emerald-900 selection:text-white">
-      {/* Mobile Wrapper */}
-      <div className="max-w-md mx-auto min-h-screen bg-zinc-950 flex flex-col relative shadow-2xl shadow-zinc-900 border-x border-zinc-900">
+    <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-emerald-900 selection:text-white flex overflow-hidden">
+      
+      {/* === DESKTOP SIDEBAR === */}
+      <aside className="hidden md:flex flex-col w-64 bg-zinc-950 border-r border-zinc-900 p-6 flex-shrink-0 z-20">
+        <div className="mb-10 pl-2">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
+            Cockpit 2026
+            </h1>
+            <p className="text-xs text-zinc-500 uppercase tracking-widest mt-1">
+            Financial Control
+            </p>
+        </div>
+
+        <nav className="flex-1">
+            <NavButton view="dashboard" icon={Icons.Calendar} label="Meu Mês" desktop />
+            <NavButton view="reports" icon={Icons.Reports} label="Relatórios" desktop />
+            <NavButton view="debts" icon={Icons.Debts} label="Passivos" desktop />
+            <NavButton view="plan" icon={Icons.Plan} label="Planejamento" desktop />
+        </nav>
+
+        <button 
+            onClick={() => setCurrentView('add')}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+        >
+            <Icons.Add size={18} /> Novo Lançamento
+        </button>
+
+        <div className="mt-8 pt-6 border-t border-zinc-900 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
+              AL
+            </div>
+            <div>
+                <p className="text-sm font-bold text-white">Alan</p>
+                <p className="text-xs text-zinc-500">Premium User</p>
+            </div>
+        </div>
+      </aside>
+
+      {/* === MAIN CONTENT WRAPPER === */}
+      <main className="flex-1 relative flex flex-col h-screen overflow-hidden bg-black md:bg-zinc-950/50">
         
-        {/* Header / Status Bar Area */}
+        {/* Mobile Header (Hidden on Desktop) */}
         {currentView !== 'add' && (
-          <header className="px-6 pt-6 pb-2 flex justify-between items-center bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
+          <header className="md:hidden px-6 pt-6 pb-2 flex justify-between items-center bg-zinc-950/80 backdrop-blur sticky top-0 z-10 flex-shrink-0">
             <div>
               <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
                 Cockpit 2026
@@ -139,40 +182,43 @@ const App: React.FC = () => {
           </header>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto pb-24 scroll-smooth">
-          {currentView === 'dashboard' && <Dashboard state={state} onToggleStatus={handleToggleStatus} />}
-          {currentView === 'reports' && <Reports state={state} onGenerateNextMonth={handleGenerateNextMonth} />}
-          {currentView === 'add' && (
-            <QuickAdd 
-              onAdd={handleAddTransactions} 
-              onCancel={() => setCurrentView('dashboard')} 
-              availableCategories={state.categories}
-              availableCards={state.debts}
-              onAddCard={handleAddDebt}
-            />
-          )}
-          {currentView === 'debts' && (
-            <Passivos 
-              debts={state.debts} 
-              onAddDebt={handleAddDebt}
-              onUpdateDebt={handleUpdateDebt}
-            />
-          )}
-          {currentView === 'plan' && (
-            <Planning 
-              onGenerateNextMonth={handleGenerateNextMonth} 
-              variableCap={state.variableCap} 
-              categories={state.categories}
-              onAddCategory={handleAddCategory}
-            />
-          )}
-        </main>
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth">
+            {/* Desktop Center Container - constrained for readability but wider than mobile */}
+            <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
+                {currentView === 'dashboard' && <Dashboard state={state} onToggleStatus={handleToggleStatus} />}
+                {currentView === 'reports' && <Reports state={state} onGenerateNextMonth={handleGenerateNextMonth} />}
+                {currentView === 'add' && (
+                    <QuickAdd 
+                    onAdd={handleAddTransactions} 
+                    onCancel={() => setCurrentView('dashboard')} 
+                    availableCategories={state.categories}
+                    availableCards={state.debts}
+                    onAddCard={handleAddDebt}
+                    />
+                )}
+                {currentView === 'debts' && (
+                    <Passivos 
+                    debts={state.debts} 
+                    onAddDebt={handleAddDebt}
+                    onUpdateDebt={handleUpdateDebt}
+                    />
+                )}
+                {currentView === 'plan' && (
+                    <Planning 
+                    onGenerateNextMonth={handleGenerateNextMonth} 
+                    variableCap={state.variableCap} 
+                    categories={state.categories}
+                    onAddCategory={handleAddCategory}
+                    />
+                )}
+            </div>
+        </div>
 
-        {/* Bottom Navigation (Hidden on Add screen) */}
+        {/* Mobile Bottom Navigation (Hidden on Add screen & Desktop) */}
         {currentView !== 'add' && (
-          <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-900 pb-safe pt-2 px-2 z-50">
-            <div className="flex justify-between items-end pb-4 px-2">
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-900 pb-safe pt-2 px-2 z-50">
+            <div className="flex justify-between items-end pb-4 px-2 max-w-md mx-auto">
               <NavButton view="dashboard" icon={Icons.Calendar} label="Meu Mês" />
               <NavButton view="reports" icon={Icons.Reports} label="Relatórios" />
               
@@ -191,7 +237,7 @@ const App: React.FC = () => {
             </div>
           </nav>
         )}
-      </div>
+      </main>
     </div>
   );
 };
