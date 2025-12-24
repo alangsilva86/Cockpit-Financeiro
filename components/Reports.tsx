@@ -397,43 +397,47 @@ export const Reports: React.FC<ReportsProps> = ({
 
         {/* Charts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
-          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64 min-h-0 min-w-0">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-xs text-zinc-400 uppercase font-bold">Custo de Vida por categoria</h4>
+          <div className="rounded-[32px] border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Custo de Vida por categoria</span>
               <span className="text-[10px] text-zinc-500">{lifeChartData.length} itens</span>
             </div>
-            <div className="w-full h-full min-h-0 min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
-                <PieChart>
-                  <Pie data={lifeChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} paddingAngle={4}>
-                    {lifeChartData.map((entry, index) => (
-                      <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="flex-1 min-h-[140px] w-full flex items-center justify-center">
+              <div className="w-full h-full min-h-[140px] min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minHeight={120} minWidth={120}>
+                  <PieChart>
+                    <Pie data={lifeChartData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={82} paddingAngle={4}>
+                      {lifeChartData.map((entry, index) => (
+                        <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
-          <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64 min-h-0 min-w-0">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-xs text-zinc-400 uppercase font-bold">Linha do tempo de gastos</h4>
-              <div className="flex gap-2 text-[10px] text-zinc-500">
-                <span className="text-blue-400">Vida</span>
-                <span className="text-rose-400">Juros</span>
+          <div className="rounded-[32px] border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Linha do tempo de gastos</span>
+              <div className="flex gap-3 text-[11px]">
+                <span className="text-blue-400 font-semibold">Vida</span>
+                <span className="text-rose-400 font-semibold">Juros</span>
               </div>
             </div>
-            <div className="w-full h-full min-h-0 min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
-                <LineChart data={monthlySeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="month" stroke="#a1a1aa" fontSize={10} />
-                  <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
-                  <Line type="monotone" dataKey="gasto" stroke="#38bdf8" strokeWidth={2} />
-                  <Line type="monotone" dataKey="juros" stroke="#f43f5e" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex-1 min-h-[140px] w-full flex items-center justify-center">
+              <div className="w-full h-full min-h-[140px] min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minHeight={120} minWidth={120}>
+                  <LineChart data={monthlySeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                    <XAxis dataKey="month" stroke="#a1a1aa" fontSize={10} />
+                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString()}`} />
+                    <Line type="monotone" dataKey="gasto" stroke="#38bdf8" strokeWidth={2} />
+                    <Line type="monotone" dataKey="juros" stroke="#f43f5e" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
