@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { FilterChips } from './ui/FilterChips';
 import { EmptyState } from './ui/EmptyState';
+import { IconButton } from './ui/IconButton';
 import { addMonths, formatCurrency, formatKindLabel, formatShortDate } from '../utils/format';
 
 const competenceString = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -18,14 +19,15 @@ interface DashboardProps {
   onToggleStatus: (id: string) => void;
   onQuickAddDraft: (draft: TransactionDraft) => void;
   isOnline: boolean;
+  onRemoveTransaction?: (id: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQuickAddDraft, isOnline }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQuickAddDraft, isOnline, onRemoveTransaction }) => {
   const [monthOffset, setMonthOffset] = useState(0);
   const [personFilter, setPersonFilter] = useState<PersonId | 'All'>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [paymentFilter, setPaymentFilter] = useState<string>('All');
-  const [viewMode, setViewMode] = useState<'real' | 'previsto'>('previsto');
+  const [viewMode, setViewMode] = useState<'real' | 'previsto'>('real');
 
   const targetDate = useMemo(() => {
     const d = new Date();
@@ -478,35 +480,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                         </span>
                       )}
 
-                      <button
-                        onClick={() => onToggleStatus(item.id)}
-                        className={`mt-2 flex items-center gap-1 text-[9px] font-bold px-2 py-1 rounded-full transition-colors border
-                        ${isPaid ? 'bg-transparent border-zinc-800 text-zinc-600' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'}`}
-                      >
-                        {isPaid ? <Icons.Check size={10} /> : null}
-                        {isPaid ? 'PAGO' : 'CONFIRMAR'}
-                      </button>
-                      {isPast && !isPaid && (
-                        <Button
-                          variant="ghost"
-                          className="mt-2 px-4 text-[10px] font-bold uppercase underline text-emerald-400"
-                          onClick={() =>
-                            onQuickAddDraft({
-                              amount: item.amount,
-                              description: `Pagamento ${item.description}`,
-                              kind: 'debt_payment',
-                              paymentMethod: 'pix',
-                              cardId: item.cardId,
-                              personId: item.personId,
-                              status: 'paid',
-                              date: new Date().toISOString(),
-                              competenceMonth: competence,
-                            })
-                          }
+                      <div className="mt-2 flex flex-wrap gap-2 justify-end">
+                        <button
+                          onClick={() => onToggleStatus(item.id)}
+                          className={`flex items-center gap-1 text-[9px] font-bold px-2 py-1 rounded-full transition-colors border
+                          ${isPaid ? 'bg-transparent border-zinc-800 text-zinc-600' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20'}`}
                         >
-                          Registrar pagamento
-                        </Button>
-                      )}
+                          {isPaid ? <Icons.Check size={10} /> : null}
+                          {isPaid ? 'PAGO' : 'CONFIRMAR'}
+                        </button>
+                        {isPast && !isPaid && (
+                          <Button
+                            variant="ghost"
+                            className="px-4 text-[10px] font-bold uppercase underline text-emerald-400"
+                            onClick={() =>
+                              onQuickAddDraft({
+                                amount: item.amount,
+                                description: `Pagamento ${item.description}`,
+                                kind: 'debt_payment',
+                                paymentMethod: 'pix',
+                                cardId: item.cardId,
+                                personId: item.personId,
+                                status: 'paid',
+                                date: new Date().toISOString(),
+                                competenceMonth: competence,
+                              })
+                            }
+                          >
+                            Registrar pagamento
+                          </Button>
+                        )}
+                        {onRemoveTransaction && (
+                          <IconButton
+                            aria-label={`Remover ${item.description}`}
+                            icon={<Icons.Trash size={16} />}
+                            className="border-rose-500/40 text-rose-400 bg-rose-950/40 hover:text-rose-200"
+                            onClick={() => onRemoveTransaction(item.id)}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

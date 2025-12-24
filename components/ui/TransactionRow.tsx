@@ -7,6 +7,7 @@ import { formatCurrency, formatKindLabel, formatShortDate } from '../../utils/fo
 interface TransactionRowProps {
   transaction: Transaction;
   onQuickAdd?: (draft: Partial<Transaction>) => void;
+  onRemove?: (id: string) => void;
 }
 
 const kindTone = (kind: Transaction['kind']) => {
@@ -81,6 +82,14 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({ transaction, onQ
                 competenceMonth: transaction.competenceMonth,
               })
             }
+          />
+        )}
+        {onRemove && (
+          <IconButton
+            aria-label="Excluir lançamento"
+            icon={<Icons.Trash size={16} />}
+            className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-200 border border-zinc-800 bg-zinc-900/60"
+            onClick={() => onRemove(transaction.id)}
           />
         )}
       </div>

@@ -18,12 +18,20 @@ interface ReportsProps {
   onQuickAddDraft?: (draft: Partial<Transaction>) => void;
   onToast?: (message: string, type?: 'success' | 'error') => void;
   onUpdateInstallments?: (plans: InstallmentPlan[], txs: Transaction[]) => void;
+  onRemoveTransaction?: (id: string) => void;
 }
 
 type TimeTab = 'past' | 'present' | 'future';
 
-export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, onQuickAddDraft, onToast, onUpdateInstallments }) => {
-  const [activeTab, setActiveTab] = useState<TimeTab>('past');
+export const Reports: React.FC<ReportsProps> = ({
+  state,
+  onGenerateNextMonth,
+  onQuickAddDraft,
+  onToast,
+  onUpdateInstallments,
+  onRemoveTransaction,
+}) => {
+  const [activeTab, setActiveTab] = useState<TimeTab>('present');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0); // 0 = current, -1 = last month
   const [personFilter, setPersonFilter] = useState<PersonId | 'All'>('All');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | 'All'>('All');
@@ -593,7 +601,12 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 
                 <div className="divide-y divide-zinc-800/50">
                   {items.map((t) => (
-                    <TransactionRow key={t.id} transaction={t} onQuickAdd={onQuickAddDraft} />
+                    <TransactionRow
+                      key={t.id}
+                      transaction={t}
+                      onQuickAdd={onQuickAddDraft}
+                      onRemove={onRemoveTransaction}
+                    />
                   ))}
                 </div>
               </div>

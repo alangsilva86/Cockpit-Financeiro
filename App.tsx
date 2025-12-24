@@ -598,6 +598,28 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleRemoveTransaction = (id: string) => {
+    const exists = state.transactions.some((t) => t.id === id && !t.deleted);
+    if (!exists) return;
+
+    setState((prev) => {
+      queueUndo(prev);
+      return {
+        ...prev,
+        transactions: prev.transactions.map((t) =>
+          t.id === id ? { ...t, deleted: true, needsSync: true, updatedAt: nowIso() } : t
+        ),
+        updatedAt: nowIso(),
+      };
+    });
+
+    pushToast('Lançamento removido', 'success', {
+      actionLabel: 'Desfazer',
+      onAction: handleUndo,
+      durationMs: 30000,
+    });
+  };
+
   const handleGenerateNextMonth = () => {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -809,7 +831,7 @@ const App: React.FC = () => {
         )}
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth">
+        <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth min-h-0">
             {/* Desktop Center Container - constrained for readability but wider than mobile */}
             <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
                 {showSetupCard && currentView !== 'add' && (
@@ -848,6 +870,7 @@ const App: React.FC = () => {
                   <Dashboard 
                     state={state} 
                     onToggleStatus={handleToggleStatus} 
+                    onRemoveTransaction={handleRemoveTransaction}
                     onQuickAddDraft={handleOpenQuickAddWithDraft}
                     isOnline={isOnline}
                   />
@@ -856,6 +879,7 @@ const App: React.FC = () => {
                   <Reports 
                     state={state} 
                     onGenerateNextMonth={handleGenerateNextMonth} 
+                    onRemoveTransaction={handleRemoveTransaction}
                     onQuickAddDraft={handleOpenQuickAddWithDraft}
                     onToast={pushToast}
                     onUpdateInstallments={(plans, txs) => setState((prev) => ({ ...prev, installmentPlans: plans, transactions: txs }))}
