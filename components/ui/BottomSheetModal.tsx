@@ -19,14 +19,14 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({ open, title,
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md rounded-t-3xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+      <div className="relative w-full max-w-md rounded-t-3xl border border-zinc-800 bg-zinc-950 p-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="text-sm font-bold text-white">{title}</div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white">
             <Icons.Close size={16} />
           </button>
         </div>
-        <div className="mt-4 space-y-3 text-sm text-zinc-300">{children}</div>
+        <div className="mt-4 space-y-2 text-sm text-zinc-300">{children}</div>
         {actions && <div className="mt-4 flex gap-2">{actions}</div>}
       </div>
     </div>

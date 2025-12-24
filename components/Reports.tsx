@@ -7,6 +7,9 @@ import { EmptyState } from './ui/EmptyState';
 import { FilterChips } from './ui/FilterChips';
 import { KpiCard } from './ui/KpiCard';
 import { TransactionRow } from './ui/TransactionRow';
+import { Button } from './ui/Button';
+import { IconButton } from './ui/IconButton';
+import { Chip } from './ui/Chip';
 import { addMonths, formatCurrency, formatKindLabel } from '../utils/format';
 
 interface ReportsProps {
@@ -262,11 +265,11 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950 animate-in fade-in pb-24">
+    <div className="flex flex-col h-full bg-zinc-950 animate-in fade-in pb-16">
       
       {/* 1. Header & Tabs */}
       <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-zinc-900 pb-2">
-        <div className="px-6 pt-6 pb-4 flex justify-between items-center">
+        <div className="px-6 pt-6 pb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-white">Relatórios</h1>
             <p className="text-xs text-zinc-500">
@@ -275,6 +278,10 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
               {activeTab === 'future' && "Projeção e planejamento"}
             </p>
           </div>
+          <Button variant="primary" className="gap-2 normal-case" onClick={onGenerateNextMonth}>
+            <Icons.Calendar size={16} />
+            Gerar próximo mês
+          </Button>
         </div>
 
         {/* Temporal Tabs */}
@@ -283,7 +290,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSelectedMonthOffset(0); setShowLifeDetails(false); }}
-              className={`pb-3 text-sm font-bold capitalize transition-all border-b-2 ${
+              className={`pb-2 text-sm font-bold capitalize transition-all border-b-2 ${
                 activeTab === tab 
                   ? 'text-emerald-400 border-emerald-400' 
                   : 'text-zinc-500 border-transparent hover:text-zinc-300'
@@ -295,17 +302,27 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         </div>
 
         {/* Month Selector (Simple) */}
-        <div className="px-6 py-3 flex items-center justify-between bg-zinc-900/50">
-           <button onClick={() => setSelectedMonthOffset(prev => prev - 1)} className="text-zinc-500 hover:text-white"><Icons.ChevronLeft size={20}/></button>
-           <span className="text-sm font-mono font-bold text-zinc-200 capitalize">{monthLabel}</span>
-           <button onClick={() => setSelectedMonthOffset(prev => prev + 1)} className="text-zinc-500 hover:text-white"><Icons.ChevronRight size={20}/></button>
+        <div className="px-6 py-2 flex items-center justify-between bg-zinc-900/50">
+          <IconButton
+            aria-label="Mês anterior"
+            icon={<Icons.ChevronLeft size={20} />}
+            className="border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white"
+            onClick={() => setSelectedMonthOffset((prev) => prev - 1)}
+          />
+          <span className="text-sm font-mono font-bold text-zinc-200 capitalize">{monthLabel}</span>
+          <IconButton
+            aria-label="Próximo mês"
+            icon={<Icons.ChevronRight size={20} />}
+            className="border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white"
+            onClick={() => setSelectedMonthOffset((prev) => prev + 1)}
+          />
         </div>
       </div>
 
       {/* 2. Content Areas */}
       <div className="p-4 space-y-6 overflow-y-auto">
         {/* === RESUMO EXECUTIVO === */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard
             title="Taxa de poupança"
             value={`${savingsRate}%`}
@@ -324,43 +341,40 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         </div>
 
         {/* === FILTER CHIPS === */}
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-           {(['All', 'alan', 'kellen', 'casa'] as const).map(p => (
-             <button 
-                key={p}
-                onClick={() => setPersonFilter(p)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap border ${
-                  personFilter === p 
-                    ? 'bg-zinc-100 text-zinc-900 border-zinc-100' 
-                    : 'bg-zinc-900 text-zinc-500 border-zinc-800'
-                }`}
-             >
-               {p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
-             </button>
-           ))}
-           <select
-             value={paymentFilter}
-             onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
-             className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-full px-3 py-1"
-           >
-             {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
-               <option key={p} value={p}>{p === 'All' ? 'Qualquer pagamento' : p}</option>
-             ))}
-           </select>
-           <select
-             value={statusFilter}
-             onChange={(e) => setStatusFilter(e.target.value as 'All' | 'paid' | 'pending')}
-             className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-full px-3 py-1"
-           >
-             <option value="All">Status</option>
-             <option value="paid">Pagos</option>
-             <option value="pending">Pendentes</option>
-           </select>
+        <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {(['All', 'alan', 'kellen', 'casa'] as const).map((p) => (
+            <Chip
+              key={p}
+              label={p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
+              selected={personFilter === p}
+              onClick={() => setPersonFilter(p)}
+            />
+          ))}
+          <div className="flex items-center gap-2">
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
+              className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
+            >
+              {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
+                <option key={p} value={p}>{p === 'All' ? 'Qualquer pagamento' : p}</option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'All' | 'paid' | 'pending')}
+              className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
+            >
+              <option value="All">Status</option>
+              <option value="paid">Pagos</option>
+              <option value="pending">Pendentes</option>
+            </select>
+          </div>
         </div>
         <FilterChips chips={filterChips} onClear={clearFilters} />
 
         {/* === SUMMARY CARDS === */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Custo Real (Vida + Juros)</span>
             <span className="text-xl font-bold text-white block">R$ {formatCurrency(stats.realCost)}</span>
@@ -374,7 +388,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 h-64">
             <div className="flex justify-between items-center mb-2">
               <h4 className="text-xs text-zinc-400 uppercase font-bold">Custo de Vida por categoria</h4>
@@ -413,40 +427,35 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
         </div>
 
         {/* Exports and insights */}
-        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-3">
+        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-2">
           <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={exportCSV}
-              className="px-3 py-2 bg-zinc-800 rounded-lg text-xs font-bold text-white border border-zinc-700 hover:bg-zinc-700"
-            >
+            <Button variant="secondary" className="normal-case text-xs" onClick={exportCSV}>
               Exportar CSV
-            </button>
-            <button 
-              onClick={exportPDF}
-              className="px-3 py-2 bg-zinc-800 rounded-lg text-xs font-bold text-white border border-zinc-700 hover:bg-zinc-700"
-            >
+            </Button>
+            <Button variant="ghost" className="normal-case text-xs" onClick={exportPDF}>
               PDF/Imprimir
-            </button>
-            <button 
+            </Button>
+            <Button
+              variant="secondary"
+              className="normal-case text-xs"
               onClick={handleInsight}
-              disabled={loadingInsight}
-              className="px-3 py-2 bg-emerald-600 rounded-lg text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+              loading={loadingInsight}
             >
-              {loadingInsight ? 'Gerando...' : 'Insight IA'}
-            </button>
+              Insight IA
+            </Button>
           </div>
           <p className="text-sm text-zinc-300 leading-snug">{insight}</p>
         </div>
 
         {/* Installment Plans */}
-        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-3">
+        <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="text-xs text-zinc-400 uppercase font-bold">Parcelamentos</h4>
             <span className="text-[10px] text-zinc-500">{plansView.length} ativos</span>
           </div>
           {plansView.length === 0 && <p className="text-xs text-zinc-500">Nenhum parcelamento.</p>}
           {plansView.map(({ plan: installmentPlan, remaining, nextDate, totalGenerated }) => (
-            <div key={installmentPlan.id} className="border border-zinc-800 rounded-xl p-3 flex justify-between items-start">
+            <div key={installmentPlan.id} className="border border-zinc-800 rounded-xl p-4 flex justify-between items-start gap-4">
               <div>
                 <p className="text-sm text-white font-bold">{installmentPlan.description}</p>
                 <p className="text-[10px] text-zinc-500">
@@ -455,25 +464,40 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
                 <p className="text-[10px] text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="ghost"
+                  className="text-[10px] normal-case tracking-wide"
                   onClick={() => handleCancelPlan(installmentPlan.id)}
                   disabled={!onUpdateInstallments}
-                  className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
                 >
                   Cancelar futuras
-                </button>
-                <button
-                  onClick={() => onUpdateInstallments?.(
-                    state.installmentPlans.map((p) => p.id === installmentPlan.id ? { ...p, status: 'finished', remainingInstallments: 0, updatedAt: new Date().toISOString() } : p),
-                    state.transactions.map((t) => t.installment?.groupId === installmentPlan.id && t.status === 'pending'
-                      ? { ...t, status: 'paid', date: new Date().toISOString(), competenceMonth: t.competenceMonth || '', needsSync: true, updatedAt: new Date().toISOString() }
-                      : t)
-                  )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="text-[10px] normal-case tracking-wide"
                   disabled={!onUpdateInstallments}
-                  className="text-[10px] px-3 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                  onClick={() =>
+                    onUpdateInstallments?.(
+                      state.installmentPlans.map((p) =>
+                        p.id === installmentPlan.id ? { ...p, status: 'finished', remainingInstallments: 0, updatedAt: new Date().toISOString() } : p
+                      ),
+                      state.transactions.map((t) =>
+                        t.installment?.groupId === installmentPlan.id && t.status === 'pending'
+                          ? {
+                              ...t,
+                              status: 'paid',
+                              date: new Date().toISOString(),
+                              competenceMonth: t.competenceMonth || '',
+                              needsSync: true,
+                              updatedAt: new Date().toISOString(),
+                            }
+                          : t
+                      )
+                    )
+                  }
                 >
                   Quitar restantes
-                </button>
+                </Button>
                 <span className="text-[10px] text-zinc-500 self-center">{totalGenerated} lanç.</span>
               </div>
             </div>
@@ -485,7 +509,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
            <h3 className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Para onde foi o dinheiro</h3>
            
            {/* Life Cost with Expansion Logic */}
-           <div className={`rounded-xl border border-zinc-800/50 transition-all ${showLifeDetails ? 'bg-zinc-900/50 p-3' : 'bg-transparent'}`}>
+           <div className={`rounded-xl border border-zinc-800/50 transition-all p-4 ${showLifeDetails ? 'bg-zinc-900/50' : 'bg-transparent'}`}>
              <div 
                 className={`space-y-1 ${activeTab === 'past' ? 'cursor-pointer' : ''}`}
                 onClick={() => activeTab === 'past' && setShowLifeDetails(!showLifeDetails)}
@@ -506,7 +530,7 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
              {/* Expanded Category List */}
              {showLifeDetails && activeTab === 'past' && (
-                 <div className="mt-4 space-y-3 animate-in slide-in-from-top-2 pt-2 border-t border-zinc-800/50">
+                 <div className="mt-4 space-y-2 animate-in slide-in-from-top-2 pt-2 border-t border-zinc-800/50">
                     <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-2">
                         <span>Categoria</span>
                         <span>% do Custo de Vida</span>
@@ -579,15 +603,12 @@ export const Reports: React.FC<ReportsProps> = ({ state, onGenerateNextMonth, on
 
         {/* === FUTURE TAB SPECIFIC ACTION === */}
         {activeTab === 'future' && (
-           <div className="pb-8">
-             <button 
-                onClick={onGenerateNextMonth}
-                className="w-full py-4 bg-blue-600 rounded-xl text-white font-bold flex items-center justify-center gap-2 hover:bg-blue-500 transition-colors"
-             >
-               <Icons.Copy size={18} />
-               Gerar Roteiro para {monthLabel}
-             </button>
-           </div>
+          <div className="pb-8">
+            <Button variant="secondary" className="w-full normal-case gap-2" onClick={onGenerateNextMonth}>
+              <Icons.Copy size={18} />
+              Gerar Roteiro para {monthLabel}
+            </Button>
+          </div>
         )}
         
         {/* Empty State */}

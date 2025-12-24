@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction } from '../../types';
 import { Icons } from '../Icons';
+import { IconButton } from './IconButton';
 import { formatCurrency, formatKindLabel, formatShortDate } from '../../utils/format';
 
 interface TransactionRowProps {
@@ -34,13 +35,13 @@ const amountTone = (transaction: Transaction) => {
 
 export const TransactionRow: React.FC<TransactionRowProps> = ({ transaction, onQuickAdd }) => {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3 group">
+    <div style={{ minHeight: 56 }} className="flex items-center justify-between gap-4 px-4 py-2 group">
       <div>
         <div className="text-sm font-medium text-zinc-200">{transaction.description}</div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
           <span>{formatShortDate(transaction.date)}</span>
           <span>•</span>
-          <span className={`rounded-full border px-2 py-0.5 font-bold ${kindTone(transaction.kind)}`}>
+          <span className={`rounded-full border px-2 py-1 font-bold ${kindTone(transaction.kind)}`}>
             {formatKindLabel(transaction.kind)}
           </span>
           {transaction.categoryId && (
@@ -56,12 +57,15 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({ transaction, onQ
           )}
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <span className={`font-mono text-sm ${amountTone(transaction)}`}>
           R$ {formatCurrency(transaction.amount)}
         </span>
         {onQuickAdd && (
-          <button
+          <IconButton
+            aria-label="Relançar/ajustar item"
+            icon={<Icons.Edit size={16} />}
+            className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-emerald-400 border border-zinc-800 bg-zinc-900/60"
             onClick={() =>
               onQuickAdd({
                 amount: transaction.amount,
@@ -77,11 +81,7 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({ transaction, onQ
                 competenceMonth: transaction.competenceMonth,
               })
             }
-            className="text-zinc-600 opacity-0 transition-colors group-hover:opacity-100 hover:text-emerald-400"
-            title="Relançar/ajustar este item"
-          >
-            <Icons.Edit size={14} />
-          </button>
+          />
         )}
       </div>
     </div>

@@ -68,7 +68,7 @@ export const TrustBar: React.FC<TrustBarProps> = ({
   return (
     <div className="sticky top-0 z-30 border-b border-zinc-900 bg-zinc-950/90 backdrop-blur">
       <div className="flex items-center justify-between gap-2 px-4 py-2 text-[11px]">
-        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${tone}`}>
+        <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-1 ${tone}`}>
           {icon}
           <span className="font-semibold">{label}</span>
         </div>
@@ -76,7 +76,7 @@ export const TrustBar: React.FC<TrustBarProps> = ({
           {showSyncAction && (
             <button
               onClick={onSyncNow}
-              className="rounded-full border border-emerald-500/40 px-3 py-1 text-[10px] font-bold text-emerald-300 hover:text-white"
+              className="rounded-full border border-emerald-500/40 px-4 py-1 text-[10px] font-bold text-emerald-300 hover:text-white"
             >
               Sincronizar agora
             </button>
@@ -84,14 +84,14 @@ export const TrustBar: React.FC<TrustBarProps> = ({
           {canInstall && (
             <button
               onClick={onInstall}
-              className="rounded-full border border-blue-500/40 px-3 py-1 text-[10px] font-bold text-blue-300 hover:text-white"
+              className="rounded-full border border-blue-500/40 px-4 py-1 text-[10px] font-bold text-blue-300 hover:text-white"
             >
               Instalar
             </button>
           )}
           <button
             onClick={onOpenDetails}
-            className="rounded-full border border-zinc-800 px-3 py-1 text-[10px] font-bold text-zinc-400 hover:text-white"
+            className="rounded-full border border-zinc-800 px-4 py-1 text-[10px] font-bold text-zinc-400 hover:text-white"
           >
             Detalhes
           </button>

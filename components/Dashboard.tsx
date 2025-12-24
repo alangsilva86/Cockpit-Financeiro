@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AppState, PersonId, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
+import { Button } from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { FilterChips } from './ui/FilterChips';
 import { EmptyState } from './ui/EmptyState';
@@ -231,8 +232,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
         </div>
 
         <div className="px-6 pt-4 pb-4 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setMonthOffset((o) => o - 1)}
                 className="p-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
@@ -257,7 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
             <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 p-1">
               <button
                 onClick={() => setViewMode('real')}
-                className={`px-3 py-1 text-[10px] font-bold rounded-full ${
+                className={`px-4 py-1 text-[10px] font-bold rounded-full ${
                   viewMode === 'real' ? 'bg-white text-black' : 'text-zinc-500'
                 }`}
               >
@@ -265,7 +266,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
               </button>
               <button
                 onClick={() => setViewMode('previsto')}
-                className={`px-3 py-1 text-[10px] font-bold rounded-full ${
+                className={`px-4 py-1 text-[10px] font-bold rounded-full ${
                   viewMode === 'previsto' ? 'bg-white text-black' : 'text-zinc-500'
                 }`}
               >
@@ -283,14 +284,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                 }`}
               >
                 {p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              variant="primary"
+              className="w-full md:w-auto items-center justify-center gap-2"
+              onClick={() =>
+                onQuickAddDraft?.({
+                  amount: 0,
+                  description: '',
+                  kind: 'expense',
+                  paymentMethod: 'pix',
+                  status: 'paid',
+                  date: new Date().toISOString(),
+                })
+              }
+            >
+              <Icons.Add size={16} />
+              Novo lançamento
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="px-4 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard
             title="Disponível do mês"
             value={`R$ ${formatCurrency(totals.available)}`}
@@ -323,7 +343,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
               {nextSevenDays.slice(0, 5).map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-3"
+                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4"
                 >
                   <div>
                     <p className="text-sm font-medium text-zinc-200">{item.title}</p>
@@ -334,7 +354,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                   <div className="text-right">
                     <div className="text-sm font-mono text-zinc-200">R$ {formatCurrency(item.amount)}</div>
                     {item.type === 'card' ? (
-                      <button
+                      <Button
+                        variant="secondary"
+                        className="mt-2 px-4 text-[10px]"
                         onClick={() =>
                           onQuickAddDraft({
                             amount: item.amount,
@@ -347,17 +369,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                             competenceMonth: competenceString(new Date(item.date)),
                           })
                         }
-                        className="mt-2 text-[10px] font-bold text-emerald-400 hover:text-white"
                       >
                         Pagar agora
-                      </button>
+                      </Button>
                     ) : (
-                      <button
+                      <Button
+                        variant="ghost"
+                        className="mt-2 px-4 text-[10px]"
                         onClick={() => onToggleStatus(item.txId)}
-                        className="mt-2 text-[10px] font-bold text-emerald-400 hover:text-white"
                       >
                         Confirmar
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -396,7 +418,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
 
         <div className="space-y-4">
           <h3 className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest px-2">Linha do Tempo</h3>
-          <div className="relative border-l border-zinc-800 ml-3 space-y-8">
+          <div className="relative border-l border-zinc-800 ml-2 space-y-8">
             {filteredMonthData.map((item) => {
               const { day, weekday } = formatDate(item.date);
               const isPaid = item.status === 'paid';
@@ -420,7 +442,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                   />
 
                   <div className={`flex justify-between items-start transition-all duration-300 ${isPaid ? 'opacity-40 grayscale' : 'opacity-100'}`}>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <div className="flex flex-col items-center min-w-[30px] pt-0.5">
                         <span className={`text-sm font-bold ${isPaid ? 'text-zinc-600' : 'text-zinc-300'}`}>{day}</span>
                         <span className="text-[9px] text-zinc-600 uppercase">{weekday}</span>
@@ -465,7 +487,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                         {isPaid ? 'PAGO' : 'CONFIRMAR'}
                       </button>
                       {isPast && !isPaid && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          className="mt-2 px-4 text-[10px] font-bold uppercase underline text-emerald-400"
                           onClick={() =>
                             onQuickAddDraft({
                               amount: item.amount,
@@ -479,10 +503,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
                               competenceMonth: competence,
                             })
                           }
-                          className="text-[10px] text-emerald-400 underline mt-2 hover:text-white"
                         >
                           Registrar pagamento
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>

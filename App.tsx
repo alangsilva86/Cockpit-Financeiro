@@ -5,6 +5,9 @@ import { Passivos } from './components/Passivos';
 import { Planning } from './components/Planning';
 import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
+import { Button } from './components/ui/Button';
+import { BottomNavItem } from './components/ui/BottomNavItem';
+import { IconButton } from './components/ui/IconButton';
 import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/categories';
 import { syncAppState } from './services/syncService';
@@ -422,6 +425,36 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler as any);
   }, []);
 
+  const pushToast = useCallback(
+    (
+      message: string,
+      type: 'success' | 'error' = 'success',
+      options?: {
+        actionLabel?: string;
+        onAction?: () => void;
+        secondaryLabel?: string;
+        onSecondary?: () => void;
+        durationMs?: number;
+      }
+    ) => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+      setToast({
+        message,
+        type,
+        actionLabel: options?.actionLabel,
+        onAction: options?.onAction,
+        secondaryLabel: options?.secondaryLabel,
+        onSecondary: options?.onSecondary,
+        durationMs: options?.durationMs,
+      });
+      const duration = options?.durationMs ?? 2400;
+      toastTimerRef.current = window.setTimeout(() => setToast(null), duration);
+    },
+    []
+  );
+
   const runSync = useCallback(
     async (force = false) => {
       if (!isOnline || isSyncing) return;
@@ -479,36 +512,6 @@ const App: React.FC = () => {
       window.removeEventListener('visibilitychange', visibilityHandler);
     };
   }, [forceSync, isOnline, runSync]);
-
-  const pushToast = useCallback(
-    (
-      message: string,
-      type: 'success' | 'error' = 'success',
-      options?: {
-        actionLabel?: string;
-        onAction?: () => void;
-        secondaryLabel?: string;
-        onSecondary?: () => void;
-        durationMs?: number;
-      }
-    ) => {
-      if (toastTimerRef.current) {
-        window.clearTimeout(toastTimerRef.current);
-      }
-      setToast({
-        message,
-        type,
-        actionLabel: options?.actionLabel,
-        onAction: options?.onAction,
-        secondaryLabel: options?.secondaryLabel,
-        onSecondary: options?.onSecondary,
-        durationMs: options?.durationMs,
-      });
-      const duration = options?.durationMs ?? 2400;
-      toastTimerRef.current = window.setTimeout(() => setToast(null), duration);
-    },
-    []
-  );
 
   useEffect(() => {
     return () => {
@@ -702,7 +705,7 @@ const App: React.FC = () => {
       className={`
         flex items-center transition-all duration-200
         ${desktop 
-            ? `w-full px-4 py-3 rounded-xl gap-3 mb-2 hover:bg-zinc-900 ${currentView === view ? 'bg-zinc-900 text-emerald-400 border border-zinc-800' : 'text-zinc-500'}`
+            ? `w-full px-4 py-4 rounded-xl gap-2 mb-2 hover:bg-zinc-900 ${currentView === view ? 'bg-zinc-900 text-emerald-400 border border-zinc-800' : 'text-zinc-500'}`
             : `flex-col justify-center w-full py-1 space-y-1 ${currentView === view ? 'text-emerald-500' : 'text-zinc-500 hover:text-zinc-300'}`
         }
       `}
@@ -733,20 +736,25 @@ const App: React.FC = () => {
             <NavButton view="plan" icon={Icons.Plan} label="Planejamento" desktop />
         </nav>
 
-        <button
+        <Button
+            variant="ghost"
+            fullWidth
+            className="mb-3 justify-start text-xs text-zinc-400 hover:text-white"
             onClick={handleOpenSetup}
-            className="mb-3 w-full rounded-xl border border-zinc-800 px-4 py-2 text-left text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center gap-2"
         >
             <Icons.Help size={16} />
             Ajuda/Setup
-        </button>
+        </Button>
 
-        <button 
+        <Button
+            variant="primary"
+            fullWidth
             onClick={() => setCurrentView('add')}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+            className="flex items-center justify-center gap-2"
         >
-            <Icons.Add size={18} /> Novo Lançamento
-        </button>
+            <Icons.Add size={18} />
+            Novo Lançamento
+        </Button>
 
         <div className="mt-8 pt-6 border-t border-zinc-900 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
@@ -787,13 +795,12 @@ const App: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenSetup}
-                className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-white"
+              <IconButton
                 aria-label="Ajuda e setup"
-              >
-                <Icons.Help size={16} />
-              </button>
+                icon={<Icons.Help size={16} />}
+                onClick={handleOpenSetup}
+                className="border border-zinc-800 bg-zinc-900/60 text-zinc-400"
+              />
               <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
                 AL
               </div>
@@ -898,22 +905,44 @@ const App: React.FC = () => {
         {/* Mobile Bottom Navigation (Hidden on Add screen & Desktop) */}
         {currentView !== 'add' && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-900 pb-safe pt-2 px-2 z-50">
-            <div className="flex justify-between items-end pb-4 px-2 max-w-md mx-auto">
-              <NavButton view="dashboard" icon={Icons.Calendar} label="Meu Mês" />
-              <NavButton view="reports" icon={Icons.Reports} label="Relatórios" />
-              
+            <div className="flex justify-between items-end pb-4 px-2 max-w-md mx-auto gap-2">
+              <BottomNavItem
+                icon={Icons.Calendar}
+                label="Meu Mês"
+                active={currentView === 'dashboard'}
+                onClick={() => setCurrentView('dashboard')}
+              />
+              <BottomNavItem
+                icon={Icons.Reports}
+                label="Relatórios"
+                active={currentView === 'reports'}
+                onClick={() => setCurrentView('reports')}
+              />
+
               {/* Floating Action Button (FAB) */}
-              <div className="relative -top-5">
-                <button 
-                  onClick={() => setCurrentView('add')}
-                  className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-900/50 hover:bg-emerald-500 transition-transform active:scale-95 border-4 border-zinc-950"
-                >
+                <div className="relative -top-5">
+                  <Button
+                    variant="primary"
+                    id="fab-action"
+                    className="h-14 w-14 rounded-full text-white shadow-lg shadow-emerald-900/50 flex items-center justify-center p-0"
+                    onClick={() => setCurrentView('add')}
+                  >
                   <Icons.Add size={28} />
-                </button>
+                </Button>
               </div>
 
-              <NavButton view="debts" icon={Icons.Debts} label="Passivos" />
-              <NavButton view="plan" icon={Icons.Plan} label="Plano" />
+              <BottomNavItem
+                icon={Icons.Debts}
+                label="Passivos"
+                active={currentView === 'debts'}
+                onClick={() => setCurrentView('debts')}
+              />
+              <BottomNavItem
+                icon={Icons.Plan}
+                label="Plano"
+                active={currentView === 'plan'}
+                onClick={() => setCurrentView('plan')}
+              />
             </div>
           </nav>
         )}

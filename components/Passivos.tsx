@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Card, InstallmentPlan, Transaction, TransactionDraft } from '../types';
 import { Icons } from './Icons';
+import { Button } from './ui/Button';
+import { IconButton } from './ui/IconButton';
 import { EmptyState } from './ui/EmptyState';
 import { formatCurrency, formatKindLabel, formatShortDate } from '../utils/format';
 
@@ -105,55 +107,64 @@ export const Passivos: React.FC<PassivosProps> = ({
   };
 
   return (
-    <div className="p-4 space-y-6 animate-in slide-in-from-right duration-300 pb-24">
+    <div className="p-4 space-y-6 animate-in slide-in-from-right duration-300 pb-16">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-bold text-white flex items-center gap-2"><Icons.Debts size={18}/> Passivos</h3>
           <p className="text-[10px] text-zinc-500">Cartão é meio de pagamento; fatura calculada pelo uso.</p>
         </div>
-        <div className="flex gap-2 items-center">
-          <input 
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="passivos-month">
+            Selecionar competência
+          </label>
+          <input
+            id="passivos-month"
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white px-3 py-2"
+            className="bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white px-4 py-2"
           />
-          <button 
-            onClick={() => startEdit()}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-xl flex items-center gap-1 transition-colors border border-zinc-700"
-          >
-            <Icons.Add size={14} /> Novo cartão
-          </button>
+          <Button variant="ghost" className="gap-1 text-xs normal-case tracking-wider" onClick={() => startEdit()}>
+            <Icons.Add size={16} />
+            Novo cartão
+          </Button>
         </div>
       </div>
 
       {monthCards.map(({ card, totalCharges, totalPayments, remaining, charges, payments, relatedPlans }) => (
-        <div key={card.id} className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-3">
-          <div className="flex justify-between items-start">
+          <div key={card.id} className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-2">
+          <div className="flex justify-between items-start gap-2">
             <div>
               <p className="text-white font-bold text-lg">{card.name}</p>
               <p className="text-[10px] text-zinc-500">
                 Competência {selectedMonth} · Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}
               </p>
             </div>
-            <button onClick={() => startEdit(card)} className="text-zinc-500 hover:text-white"><Icons.Edit size={16}/></button>
+            <IconButton
+              aria-label={`Editar cartão ${card.name}`}
+              icon={<Icons.Edit size={16} />}
+              className="border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-emerald-300"
+              onClick={() => startEdit(card)}
+            />
           </div>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
               <p className="text-[10px] text-zinc-500 uppercase">Compras</p>
               <p className="text-white font-mono font-bold">R$ {formatCurrency(totalCharges)}</p>
             </div>
-            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+            <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
               <p className="text-[10px] text-zinc-500 uppercase">Pagamentos</p>
               <p className="text-emerald-400 font-mono font-bold">R$ {formatCurrency(totalPayments)}</p>
             </div>
-            <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800">
+            <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
               <p className="text-[10px] text-zinc-500 uppercase">Saldo</p>
               <p className={`${remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>R$ {formatCurrency(remaining)}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              variant="primary"
+              className="flex-1 normal-case text-sm"
               onClick={() =>
                 onQuickAddDraft?.({
                   description: `Pagamento fatura ${card.name}`,
@@ -166,11 +177,12 @@ export const Passivos: React.FC<PassivosProps> = ({
                   competenceMonth: selectedMonth,
                 })
               }
-              className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-sm font-bold hover:bg-emerald-500"
             >
               Pagar total
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1 normal-case text-sm"
               onClick={() =>
                 onQuickAddDraft?.({
                   description: `Pagamento mínimo ${card.name}`,
@@ -183,11 +195,12 @@ export const Passivos: React.FC<PassivosProps> = ({
                   competenceMonth: selectedMonth,
                 })
               }
-              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-sm"
             >
               Pagar mínimo
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              className="flex-1 normal-case text-sm"
               onClick={() =>
                 onQuickAddDraft?.({
                   description: `Pagamento ${card.name}`,
@@ -200,10 +213,9 @@ export const Passivos: React.FC<PassivosProps> = ({
                   competenceMonth: selectedMonth,
                 })
               }
-              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-sm"
             >
               Outro valor
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-2">
@@ -214,7 +226,7 @@ export const Passivos: React.FC<PassivosProps> = ({
               charges
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                 .map((t) => (
-                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-4 py-2">
                     <div>
                       <p className="text-white">{t.description}</p>
                       <p className="text-[10px] text-zinc-500">
@@ -235,7 +247,7 @@ export const Passivos: React.FC<PassivosProps> = ({
               payments
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                 .map((t) => (
-                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                  <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-4 py-2">
                     <div>
                       <p className="text-white">{t.description}</p>
                       <p className="text-[10px] text-zinc-500">
@@ -254,24 +266,26 @@ export const Passivos: React.FC<PassivosProps> = ({
             {relatedPlans.map((plan) => {
               const pendingTx = transactions.filter((t) => t.installment?.groupId === plan.id && t.status === 'pending');
               return (
-                <div key={plan.id} className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
-                  <div>
-                    <p className="text-sm text-white font-bold">{plan.description}</p>
-                    <p className="text-[10px] text-zinc-500">{plan.totalInstallments}x · faltam {pendingTx.length}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
+            <div key={plan.id} className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800 rounded-lg px-4 py-2">
+              <div>
+                <p className="text-sm text-white font-bold">{plan.description}</p>
+                <p className="text-[10px] text-zinc-500">{plan.totalInstallments}x · faltam {pendingTx.length}</p>
+              </div>
+              <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      className="text-[10px] normal-case tracking-wide"
                       onClick={() => handleCancelPlan(plan.id)}
-                      className="text-[10px] px-3 py-1 rounded-lg border border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
                     >
                       Cancelar futuras
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="text-[10px] normal-case tracking-wide"
                       onClick={() => handleFinishPlan(plan.id)}
-                      className="text-[10px] px-3 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10"
                     >
                       Quitar restantes
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -285,41 +299,45 @@ export const Passivos: React.FC<PassivosProps> = ({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-2xl border border-zinc-700 space-y-4 animate-in zoom-in-95">
                 <h4 className="text-white font-bold text-lg">{editingId ? 'Editar Cartão' : 'Novo Cartão'}</h4>
-                <input 
-                    className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                    placeholder="Nome (ex: Nubank)"
-                    value={formName}
-                    onChange={e => setFormName(e.target.value)}
+                <input
+                  className="w-full bg-zinc-950 px-4 py-2 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none"
+                  placeholder="Nome (ex: Nubank)"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input 
-                      className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                      placeholder="Fechamento"
-                      type="number"
-                      inputMode="numeric"
-                      value={formClosing}
-                      onChange={e => setFormClosing(e.target.value)}
+                  <input
+                    className="w-full bg-zinc-950 px-4 py-2 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none"
+                    placeholder="Fechamento"
+                    type="number"
+                    inputMode="numeric"
+                    value={formClosing}
+                    onChange={(e) => setFormClosing(e.target.value)}
                   />
-                  <input 
-                      className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                      placeholder="Vencimento"
-                      type="number"
-                      inputMode="numeric"
-                      value={formDue}
-                      onChange={e => setFormDue(e.target.value)}
+                  <input
+                    className="w-full bg-zinc-950 px-4 py-2 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none"
+                    placeholder="Vencimento"
+                    type="number"
+                    inputMode="numeric"
+                    value={formDue}
+                    onChange={(e) => setFormDue(e.target.value)}
                   />
                 </div>
-                <input 
-                    className="w-full bg-zinc-950 p-3 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none" 
-                    placeholder="Juros mês (%)"
-                    type="number"
-                    inputMode="decimal"
-                    value={formApr}
-                    onChange={e => setFormApr(e.target.value)}
+                <input
+                  className="w-full bg-zinc-950 px-4 py-2 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none"
+                  placeholder="Juros mês (%)"
+                  type="number"
+                  inputMode="decimal"
+                  value={formApr}
+                  onChange={(e) => setFormApr(e.target.value)}
                 />
                 <div className="flex gap-2 mt-2">
-                    <button onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-zinc-800 rounded-xl text-zinc-400 font-bold">Cancelar</button>
-                    <button onClick={saveCard} className="flex-1 py-3 bg-emerald-600 rounded-xl text-white font-bold">Salvar</button>
+                  <Button variant="ghost" className="flex-1 normal-case" onClick={() => setIsEditing(false)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="primary" className="flex-1 normal-case" onClick={saveCard}>
+                    Salvar
+                  </Button>
                 </div>
             </div>
         </div>

@@ -23,7 +23,7 @@ export const ToastAction: React.FC<ToastActionProps> = ({
       : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-100';
 
   return (
-    <div className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-sm shadow-2xl ${baseTone}`}>
+    <div className={`flex items-center justify-between gap-2 rounded-xl border p-4 text-sm shadow-2xl ${baseTone}`}>
       <span className="flex-1">{message}</span>
       <div className="flex items-center gap-2">
         {secondaryLabel && onSecondary && (

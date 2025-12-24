@@ -23,7 +23,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, subtitle, tone =
     <div className="mt-1 text-xl font-bold text-white">{value}</div>
     {subtitle && <div className="text-[10px] text-zinc-500 mt-1">{subtitle}</div>}
     {typeof progress === 'number' && (
-      <div className="mt-3">
+      <div className="mt-2">
         <div className="h-1.5 rounded-full bg-zinc-800">
           <div
             className={`h-1.5 rounded-full ${progressToneMap[tone]}`}

@@ -22,7 +22,7 @@ export const SetupProgressCard: React.FC<SetupProgressCardProps> = ({ steps, onS
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 shadow-lg">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Setup inicial</p>
           <h3 className="text-lg font-bold text-white">Conclua 3 passos para começar</h3>
@@ -37,7 +37,7 @@ export const SetupProgressCard: React.FC<SetupProgressCardProps> = ({ steps, onS
 
       <div className="mt-4 space-y-2">
         {steps.map((step) => (
-          <div key={step.id} className="flex items-center justify-between rounded-xl border border-zinc-800/70 bg-zinc-950/50 px-3 py-2">
+          <div key={step.id} className="flex items-center justify-between rounded-xl border border-zinc-800/70 bg-zinc-950/50 px-4 py-2">
             <div className="flex items-center gap-2">
               <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border ${step.done ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 text-zinc-500'}`}>
                 {step.done ? <Icons.Check size={12} /> : <Icons.Clock size={12} />}
@@ -60,7 +60,7 @@ export const SetupProgressCard: React.FC<SetupProgressCardProps> = ({ steps, onS
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={onSeedDemo}
-          className="flex-1 rounded-xl border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-[10px] font-bold text-blue-200 hover:text-white"
+          className="flex-1 rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-[10px] font-bold text-blue-200 hover:text-white"
         >
           Iniciar com dados demo
         </button>

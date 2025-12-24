@@ -3,6 +3,8 @@ import { Card, InstallmentPlan, PaymentMethod, PersonId, Transaction, Transactio
 import { Icons } from './Icons';
 import { INCOME_CATEGORIES } from '../services/categories';
 import { parseReceiptImage, suggestCategory } from '../services/aiClient';
+import { Button } from './ui/Button';
+import { IconButton } from './ui/IconButton';
 
 interface QuickAddProps {
   onAdd: (transactions: Transaction[], options?: { stayOnAdd?: boolean; newPlan?: InstallmentPlan | null }) => void;
@@ -414,7 +416,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                     value={newCardName}
                     onChange={e => setNewCardName(e.target.value)}
                     placeholder="Ex: Nubank, XP..."
-                    className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-indigo-500 focus:outline-none"
+                    className="w-full bg-zinc-950 p-4 rounded-xl border border-zinc-800 text-white mt-1 focus:border-indigo-500 focus:outline-none"
                   />
               </div>
               <div>
@@ -425,71 +427,67 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                     value={newCardDay}
                     onChange={e => setNewCardDay(e.target.value)}
                     placeholder="Ex: 05"
-                    className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-indigo-500 focus:outline-none"
+                    className="w-full bg-zinc-950 p-4 rounded-xl border border-zinc-800 text-white mt-1 focus:border-indigo-500 focus:outline-none"
                   />
               </div>
-              <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setIsCreatingCard(false)} className="flex-1 py-3 bg-zinc-800 rounded-xl font-bold text-zinc-400">Cancelar</button>
-                  <button type="submit" disabled={!newCardName} className="flex-1 py-3 bg-indigo-600 rounded-xl font-bold text-white hover:bg-indigo-500">Salvar</button>
+              <div className="flex gap-2 pt-2">
+                  <Button variant="ghost" className="flex-1" type="button" onClick={() => setIsCreatingCard(false)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="primary" className="flex-1" type="submit" disabled={!newCardName}>
+                    Salvar
+                  </Button>
               </div>
            </form>
         </div>
       )}
 
       {/* === HEADER ACTIONS === */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-bold text-zinc-400 uppercase tracking-widest">
-            Novo Lançamento
-        </h2>
-        <div className="flex gap-2">
-             {/* Templates Menu Button */}
-             <div className="relative">
-                <button
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-bold text-zinc-400 uppercase tracking-widest">
+              Novo Lançamento
+          </h2>
+          <div className="flex gap-2">
+               {/* Templates Menu Button */}
+               <div className="relative">
+                  <IconButton
+                    aria-label="Abrir templates"
+                    icon={<Icons.More size={20} />}
                     onClick={() => setShowTemplateMenu(!showTemplateMenu)}
-                    className="w-10 h-10 rounded-full bg-zinc-900/50 border border-zinc-700 text-zinc-300 flex items-center justify-center hover:bg-zinc-800"
-                >
-                    <Icons.More size={20} />
-                </button>
-                {showTemplateMenu && (
-                    <div className="absolute right-0 top-12 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 origin-top-right">
-                        <button
-                            type="button"
+                    className="border border-zinc-700 bg-zinc-900/70 text-zinc-300"
+                  />
+                  {showTemplateMenu && (
+                      <div className="absolute right-0 top-12 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 origin-top-right">
+                          <Button
+                            variant="ghost"
+                          className="w-full justify-start px-4 py-4 gap-2 text-sm font-bold"
                             onClick={() => handleTemplate('fatura')}
-                            className="w-full p-3 rounded-lg flex items-center gap-3 hover:bg-zinc-800 transition-all text-left"
-                        >
+                          >
                             <Icons.Debts size={16} className="text-indigo-400" />
-                            <div className="text-sm font-bold text-zinc-200">Pagar Fatura</div>
-                        </button>
-                        <button
-                            type="button"
+                            <span className="text-zinc-200">Pagar Fatura</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                          className="w-full justify-start px-4 py-4 gap-2 text-sm font-bold"
                             onClick={() => handleTemplate('pix')}
-                            className="w-full p-3 rounded-lg flex items-center gap-3 hover:bg-zinc-800 transition-all text-left"
-                        >
+                          >
                             <Icons.Burn size={16} className="text-rose-400" />
-                            <div className="text-sm font-bold text-zinc-200">Pix / Transferência</div>
-                        </button>
-                    </div>
-                )}
-             </div>
+                            <span className="text-zinc-200">Pix / Transferência</span>
+                          </Button>
+                      </div>
+                  )}
+               </div>
 
-            {/* Camera Button */}
-            <button 
-                onClick={handleCameraClick}
-                disabled={isScanning}
-                className={`flex items-center gap-2 px-4 h-10 rounded-full border transition-all ${
-                    isScanning 
-                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' 
-                    : 'bg-zinc-900/50 border-zinc-700 text-white hover:bg-zinc-800'
-                }`}
-            >
-            {isScanning ? (
-                <Icons.Loader className="animate-spin" size={18} />
-            ) : (
-                <Icons.Camera size={20} />
-            )}
-            </button>
+               {/* Camera Button */}
+               <IconButton
+                 aria-label="Escanear recibo"
+                 icon={isScanning ? <Icons.Loader className="animate-spin" size={18} /> : <Icons.Camera size={20} />}
+                 onClick={handleCameraClick}
+                 disabled={isScanning}
+                 className={`border border-zinc-700 bg-zinc-900/50 text-white ${isScanning ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500' : 'hover:bg-zinc-800'}`}
+               />
+          </div>
         </div>
-      </div>
 
       <div className="mb-4">
         <div className="flex justify-between text-[10px] text-zinc-500 uppercase font-bold mb-1">
@@ -508,7 +506,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
       </div>
 
       {error && (
-        <div className="text-xs text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-3">
+      <div className="text-xs text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4">
           {error}
         </div>
       )}
@@ -564,14 +562,14 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
         <div className="bg-zinc-950/40 rounded-3xl p-4 space-y-4 border border-white/5 shadow-inner">
             
             {/* Row 1: Who & Date */}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
                 <div className="flex-1 bg-zinc-900/80 p-1 rounded-xl flex border border-zinc-800">
                     {PERSONS.map((p) => (
                     <button
                         key={p}
                         type="button"
                         onClick={() => setPersonId(p)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                        className={`flex-1 h-12 py-2 text-xs font-bold rounded-lg transition-all ${
                         personId === p 
                             ? 'bg-zinc-200 text-zinc-900 shadow-sm' 
                             : 'text-zinc-500 hover:text-zinc-300'
@@ -602,7 +600,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                       key={pm}
                       type="button"
                       onClick={() => { setPaymentMethod(pm); if (pm !== 'credit') setIsInstallment(false); }}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                      className={`flex-1 py-4 text-xs font-bold rounded-lg transition-all ${
                           paymentMethod === pm ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500'
                       }`}
                     >
@@ -620,7 +618,8 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                               key={card.id}
                               type="button"
                               onClick={() => setSelectedCardId(card.id)}
-                              className={`min-w-[120px] p-3 rounded-xl border text-left transition-all ${
+                              style={{ minWidth: 120 }}
+                              className={`p-4 rounded-xl border text-left transition-all ${
                                   selectedCardId === card.id 
                                   ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/50' 
                                   : 'bg-zinc-900/80 border-zinc-800 opacity-60'
@@ -637,7 +636,8 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                           <button
                               type="button"
                               onClick={() => setIsCreatingCard(true)}
-                              className="min-w-[40px] px-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                              style={{ minWidth: 56 }}
+                              className="px-4 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors h-12"
                           >
                               <Icons.Add size={18} />
                               <span className="text-[10px] font-bold ml-1">Cartão</span>
@@ -686,7 +686,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                   <span className="text-[10px] text-zinc-500">Gera parcelas futuras automaticamente</span>
                 </div>
                 {isInstallment && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] text-zinc-500 uppercase font-bold">Parcelas (1-36)</label>
                       <input 
@@ -696,7 +696,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                         max={36}
                         value={installmentsCount}
                         onChange={(e) => setInstallmentsCount(Math.min(36, Math.max(1, parseInt(e.target.value || '1', 10))))}
-                        className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+                        className="w-full bg-zinc-950 p-4 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
@@ -705,7 +705,7 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
                         type="date"
                         value={firstInstallmentDate}
                         onChange={(e) => setFirstInstallmentDate(e.target.value)}
-                        className="w-full bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+                        className="w-full bg-zinc-950 p-4 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="col-span-2 text-[10px] text-zinc-400">
@@ -751,24 +751,22 @@ export const QuickAdd: React.FC<QuickAddProps> = ({
           Manter aberto e adicionar outro
         </label>
         <div className="flex gap-4 pt-2 mt-auto">
-          <button 
-            type="button" 
+          <Button
+            variant="ghost"
+            className="text-xs"
+            type="button"
             onClick={() => { resetForm(); onCancel(); }}
-            className="w-24 py-4 rounded-2xl bg-zinc-900/50 text-zinc-500 font-bold hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
           >
             Voltar
-          </button>
-          <button 
-            type="submit" 
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
+            type="submit"
             disabled={!amount}
-            className={`flex-1 py-4 rounded-2xl font-bold text-lg text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-xl transition-all active:scale-95 ${
-                 kind === 'income' 
-                    ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30' 
-                    : 'bg-white text-black hover:bg-zinc-200 shadow-white/10'
-            }`}
           >
             {kind === 'income' ? 'Receber' : 'Lançar'}
-          </button>
+          </Button>
         </div>
 
       </form>

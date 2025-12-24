@@ -16,7 +16,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ title, description, acti
     {actionLabel && onAction && (
       <button
         onClick={onAction}
-        className="mt-3 rounded-full border border-emerald-500/40 px-4 py-2 text-[10px] font-bold text-emerald-300 hover:text-white"
+        className="mt-2 rounded-full border border-emerald-500/40 px-4 py-2 text-[10px] font-bold text-emerald-300 hover:text-white"
       >
         {actionLabel}
       </button>
