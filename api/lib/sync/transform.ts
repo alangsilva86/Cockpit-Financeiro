@@ -1,4 +1,4 @@
-import type { AppState, Card, InstallmentPlan, Transaction } from '../../types';
+import type { AppState, Card, InstallmentPlan, Transaction } from '../../../types';
 import { toDateOnly, toMonthStart } from '../dates';
 import { entityToUuid, workspaceToUuid } from '../ids';
 

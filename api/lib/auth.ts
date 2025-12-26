@@ -20,6 +20,8 @@ const safeEqual = (left: string, right: string) => {
   return crypto.timingSafeEqual(leftBuf, rightBuf);
 };
 
+export type AuthResult = { ok: true } | { ok: false; reason: string };
+
 export const computeHmac = (secret: string, message: string) =>
   crypto.createHmac('sha256', secret).update(message).digest('hex');
 

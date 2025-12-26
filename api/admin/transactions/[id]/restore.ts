@@ -56,7 +56,7 @@ export default async function handler(req: any, res: any) {
         deleted_at: null,
         updated_at: now,
       },
-    });
+    })) as Array<Record<string, any>> | null;
     const after = rows?.[0] || null;
 
     await insertAuditEvent({

@@ -64,7 +64,7 @@ export default async function handler(req: any, res: any) {
           deleted_at: now,
           updated_at: now,
         },
-      });
+      })) as Array<Record<string, any>> | null;
       const after = rows?.[0] || null;
       await insertAuditEvent({
         workspace_id: workspaceUuid,
@@ -130,7 +130,7 @@ export default async function handler(req: any, res: any) {
       query: `id=eq.${transactionId}&workspace_id=eq.${workspaceUuid}`,
       headers: { Prefer: 'return=representation' },
       body: updates,
-    });
+    })) as Array<Record<string, any>> | null;
     const after = rows?.[0] || null;
 
     await insertAuditEvent({
