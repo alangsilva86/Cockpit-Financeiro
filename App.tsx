@@ -7,12 +7,10 @@ import { Reports } from './components/Reports';
 import { Icons } from './components/Icons';
 import { Button } from './components/ui/Button';
 import { BottomNavItem } from './components/ui/BottomNavItem';
-import { IconButton } from './components/ui/IconButton';
 import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/categories';
 import { syncAppState } from './services/syncService';
 import { BottomSheetModal } from './components/ui/BottomSheetModal';
-import { SetupProgressCard } from './components/ui/SetupProgressCard';
 import { ToastAction } from './components/ui/ToastAction';
 import { formatRelativeTime } from './utils/format';
 
@@ -25,16 +23,13 @@ const deriveCompetence = (iso: string) => {
 
 const nowIso = () => new Date().toISOString();
 
-// Initial Mock Data adapted ao novo modelo
+// Initial state with empty data
 const INITIAL_STATE: AppState = {
   schemaVersion: SCHEMA_VERSION,
-  monthlyIncome: 25000,
-  variableCap: 7500, // 30% of income rule
+  monthlyIncome: 0,
+  variableCap: 0,
   categories: INITIAL_CATEGORIES,
-  cards: [
-    { id: 'd1', name: 'Nubank Black', dueDay: 5, closingDay: 28, aprMonthly: 14, limit: 20000, createdAt: nowIso(), updatedAt: nowIso() },
-    { id: 'd2', name: 'XP Infinite', dueDay: 15, closingDay: 5, aprMonthly: 8, limit: 30000, createdAt: nowIso(), updatedAt: nowIso() },
-  ],
+  cards: [],
   installmentPlans: [],
   transactions: [],
   updatedAt: nowIso(),
@@ -167,153 +162,6 @@ const loadPersistedState = (): AppState => {
   }
 };
 
-const buildDemoState = (): AppState => {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 5);
-  const monthMid = new Date(now.getFullYear(), now.getMonth(), 12);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth(), 24);
-  const futureCharge = new Date(now.getFullYear(), now.getMonth(), 28);
-
-  const demoCards: Card[] = [
-    {
-      id: 'demo-nubank',
-      name: 'Nubank',
-      dueDay: 5,
-      closingDay: 28,
-      limit: 12000,
-      aprMonthly: 12,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    },
-    {
-      id: 'demo-xp',
-      name: 'XP Visa',
-      dueDay: 15,
-      closingDay: 5,
-      limit: 20000,
-      aprMonthly: 8,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    },
-  ];
-
-  const rawDemoTransactions: Transaction[] = [
-    {
-      id: 'demo-1',
-      date: monthStart.toISOString(),
-      competenceMonth: deriveCompetence(monthStart.toISOString()),
-      direction: 'in',
-      kind: 'income',
-      amount: 12000,
-      description: 'Salário',
-      personId: 'alan',
-      categoryId: 'Salário',
-      paymentMethod: 'pix',
-      status: 'paid',
-      needsSync: false,
-    },
-    {
-      id: 'demo-2',
-      date: monthStart.toISOString(),
-      competenceMonth: deriveCompetence(monthStart.toISOString()),
-      direction: 'out',
-      kind: 'expense',
-      amount: 3200,
-      description: 'Aluguel',
-      personId: 'casa',
-      categoryId: 'Moradia',
-      paymentMethod: 'pix',
-      status: 'paid',
-      needsSync: false,
-    },
-    {
-      id: 'demo-3',
-      date: monthMid.toISOString(),
-      competenceMonth: deriveCompetence(monthMid.toISOString()),
-      direction: 'out',
-      kind: 'expense',
-      amount: 680,
-      description: 'Mercado',
-      personId: 'casa',
-      categoryId: 'Alimentação',
-      paymentMethod: 'debit',
-      status: 'paid',
-      needsSync: false,
-    },
-    {
-      id: 'demo-4',
-      date: monthEnd.toISOString(),
-      competenceMonth: deriveCompetence(monthEnd.toISOString()),
-      direction: 'out',
-      kind: 'expense',
-      amount: 1250,
-      description: 'Notebook',
-      personId: 'alan',
-      categoryId: 'Compras',
-      paymentMethod: 'credit',
-      cardId: demoCards[0].id,
-      status: 'pending',
-      needsSync: false,
-    },
-    {
-      id: 'demo-5',
-      date: futureCharge.toISOString(),
-      competenceMonth: deriveCompetence(futureCharge.toISOString()),
-      direction: 'out',
-      kind: 'fee_interest',
-      amount: 120,
-      description: 'Juros parcelamento',
-      personId: 'alan',
-      categoryId: 'Taxas',
-      paymentMethod: 'credit',
-      cardId: demoCards[0].id,
-      status: 'pending',
-      needsSync: false,
-    },
-    {
-      id: 'demo-6',
-      date: monthEnd.toISOString(),
-      competenceMonth: deriveCompetence(monthEnd.toISOString()),
-      direction: 'out',
-      kind: 'debt_payment',
-      amount: 2400,
-      description: 'Pagamento fatura Nubank',
-      personId: 'alan',
-      categoryId: 'Taxas',
-      paymentMethod: 'pix',
-      cardId: demoCards[0].id,
-      status: 'paid',
-      needsSync: false,
-    },
-    {
-      id: 'demo-7',
-      date: monthMid.toISOString(),
-      competenceMonth: deriveCompetence(monthMid.toISOString()),
-      direction: 'out',
-      kind: 'transfer',
-      amount: 800,
-      description: 'Reserva',
-      personId: 'alan',
-      categoryId: 'Investimento',
-      paymentMethod: 'pix',
-      status: 'paid',
-      needsSync: false,
-    },
-  ];
-  const demoTransactions = rawDemoTransactions.map(normalizeTransaction);
-
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    monthlyIncome: 12000,
-    variableCap: 3600,
-    categories: INITIAL_CATEGORIES,
-    cards: demoCards.map(normalizeCard),
-    installmentPlans: [],
-    transactions: demoTransactions,
-    updatedAt: nowIso(),
-  };
-};
-
 const getInitialView = (): View => {
   if (typeof window === 'undefined') return 'dashboard';
   const hash = window.location.hash.replace('#/', '').replace('#', '');
@@ -346,11 +194,7 @@ const App: React.FC = () => {
   const [forceSync, setForceSync] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [showTrustDetails, setShowTrustDetails] = useState(false);
-  const [forceSetupOpen, setForceSetupOpen] = useState(false);
-  const [hasBudgetConfigured, setHasBudgetConfigured] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('cockpit-setup-budget') === 'true';
-  });
+  const toastTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const undoSnapshotRef = useRef<AppState | null>(null);
@@ -367,11 +211,6 @@ const App: React.FC = () => {
     if (state.monthlyIncome <= 0) return 0;
     return Math.min(100, Math.round((spent / state.monthlyIncome) * 100));
   }, [state.transactions, state.monthlyIncome]);
-
-  const hasCard = useMemo(() => state.cards.some((c) => !c.deleted), [state.cards]);
-  const hasTransaction = useMemo(() => state.transactions.some((t) => !t.deleted), [state.transactions]);
-  const isSetupComplete = hasBudgetConfigured && hasCard && hasTransaction;
-  const showSetupCard = !isSetupComplete || forceSetupOpen;
 
   const lastUsedTransaction = useMemo(() => {
     const items = state.transactions.filter((t) => !t.deleted);
@@ -701,27 +540,8 @@ const App: React.FC = () => {
       variableCap: payload.variableCap ?? prev.variableCap,
       updatedAt: nowIso(),
     }));
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('cockpit-setup-budget', 'true');
-    }
-    setHasBudgetConfigured(true);
     pushToast('Planejamento atualizado');
   };
-
-  const handleSeedDemo = () => {
-    const demo = buildDemoState();
-    setState(demo);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('cockpit-setup-budget', 'true');
-    }
-    setHasBudgetConfigured(true);
-    setForceSetupOpen(false);
-    pushToast('Dados demo carregados');
-  };
-
-  const handleOpenSetup = () => setForceSetupOpen(true);
-
-  const handleDismissSetup = () => setForceSetupOpen(false);
 
   const handleOpenQuickAddWithDraft = (draft: TransactionDraft) => {
     setQuickAddDraft(draft);
@@ -774,16 +594,6 @@ const App: React.FC = () => {
         </nav>
 
         <Button
-            variant="ghost"
-            fullWidth
-            className="mb-3 justify-start text-xs text-zinc-400 hover:text-white"
-            onClick={handleOpenSetup}
-        >
-            <Icons.Help size={16} />
-            Ajuda/Setup
-        </Button>
-
-        <Button
             variant="primary"
             fullWidth
             onClick={() => setCurrentView('add')}
@@ -832,12 +642,6 @@ const App: React.FC = () => {
                         >
                           Detalhes
                         </button>
-                        <IconButton
-                          aria-label="Ajuda e setup"
-                          icon={<Icons.Help size={16} />}
-                          onClick={handleOpenSetup}
-                          className="h-10 w-10 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 shadow-none"
-                        />
                         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-xs font-bold text-zinc-300 uppercase">
                           AL
                         </div>
@@ -850,38 +654,6 @@ const App: React.FC = () => {
                       />
                     </div>
                   </section>
-                )}
-                {showSetupCard && currentView !== 'add' && (
-                  <div className="p-4">
-                    <SetupProgressCard
-                      isComplete={isSetupComplete}
-                      onSeedDemo={handleSeedDemo}
-                      onDismiss={isSetupComplete ? handleDismissSetup : undefined}
-                      steps={[
-                        {
-                          id: 'budget',
-                          label: 'Definir renda e teto',
-                          done: hasBudgetConfigured,
-                          ctaLabel: 'Ir para Planejamento',
-                          onClick: () => setCurrentView('plan'),
-                        },
-                        {
-                          id: 'card',
-                          label: 'Cadastrar 1 cartão',
-                          done: hasCard,
-                          ctaLabel: 'Ir para Cartões',
-                          onClick: () => setCurrentView('debts'),
-                        },
-                        {
-                          id: 'tx',
-                          label: 'Criar 1 lançamento',
-                          done: hasTransaction,
-                          ctaLabel: 'Ir para Novo',
-                          onClick: () => setCurrentView('add'),
-                        },
-                      ]}
-                    />
-                  </div>
                 )}
                 {currentView === 'dashboard' && (
                   <Dashboard 
