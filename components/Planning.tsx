@@ -57,7 +57,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
   }, [monthlyIncome, variableCap]);
 
   return (
-    <div className="p-4 space-y-6 animate-in fade-in">
+    <div className="p-4 space-y-6  ">
       
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
@@ -90,7 +90,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
           Gerar Roteiro de {nextMonthLabel}
         </Button>
         {lastGeneration && (
-          <p className="text-[10px] text-blue-200 mt-2">{lastGeneration}</p>
+          <p className="text-xs text-blue-200 mt-2">{lastGeneration}</p>
         )}
       </div>
 
@@ -98,7 +98,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
       <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider">Previsão {nextCompetence}</h3>
-          <span className="text-[10px] text-zinc-500">Cartão + variáveis</span>
+          <span className="text-xs text-zinc-500">Cartão + variáveis</span>
         </div>
         <div className="space-y-2">
           {nextMonthForecast.creditByCard.map(({ card, total }) => (
@@ -108,7 +108,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
             </div>
           ))}
         </div>
-        <div className="text-[10px] text-zinc-500">
+        <div className="text-xs text-zinc-500">
           Variáveis previstas: R$ {nextMonthForecast.variableSpend.toLocaleString()}
         </div>
       </div>
@@ -141,7 +141,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
               onChange={(e) => setLocalVariableCap(parseFloat(e.target.value) || 0)}
               className="w-full mt-2 accent-emerald-500"
             />
-            <p className="text-[10px] text-zinc-500 mt-1">Use como semáforo do mês (mercado, lazer, compras).</p>
+            <p className="text-xs text-zinc-500 mt-1">Use como semáforo do mês (mercado, lazer, compras).</p>
           </div>
           <Button
             variant="secondary"
@@ -166,7 +166,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
          </div>
          
          {isAddingCat && (
-           <form onSubmit={handleAddCat} className="flex gap-2 mb-4 animate-in fade-in">
+           <form onSubmit={handleAddCat} className="flex gap-2 mb-4  ">
              <input 
                autoFocus
                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none"
@@ -185,7 +185,7 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
              <Chip key={cat} label={cat} />
            ))}
          </div>
-         <p className="text-[10px] text-zinc-600 mt-2">A IA usará estas categorias para classificar novos gastos automaticamente.</p>
+         <p className="text-xs text-zinc-600 mt-2">A IA usará estas categorias para classificar novos gastos automaticamente.</p>
       </div>
       
       <p className="text-center text-xs text-zinc-600 mt-8">

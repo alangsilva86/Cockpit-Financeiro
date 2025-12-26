@@ -107,11 +107,11 @@ export const Passivos: React.FC<PassivosProps> = ({
   };
 
   return (
-    <div className="p-4 space-y-6 animate-in slide-in-from-right duration-300 pb-16">
+    <div className="p-4 space-y-6   duration-300 pb-16">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-bold text-white flex items-center gap-2"><Icons.Debts size={18}/> Passivos</h3>
-          <p className="text-[10px] text-zinc-500">Cartão é meio de pagamento; fatura calculada pelo uso.</p>
+          <p className="text-xs text-zinc-500">Cartão é meio de pagamento; fatura calculada pelo uso.</p>
         </div>
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor="passivos-month">
@@ -136,7 +136,7 @@ export const Passivos: React.FC<PassivosProps> = ({
           <div className="flex justify-between items-start gap-2">
             <div>
               <p className="text-white font-bold text-lg">{card.name}</p>
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-xs text-zinc-500">
                 Competência {selectedMonth} · Fechamento {card.closingDay ?? '--'} · Vencimento {card.dueDay ?? '--'}
               </p>
             </div>
@@ -149,15 +149,15 @@ export const Passivos: React.FC<PassivosProps> = ({
           </div>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Compras</p>
+              <p className="text-xs text-zinc-500 uppercase">Compras</p>
               <p className="text-white font-mono font-bold">R$ {formatCurrency(totalCharges)}</p>
             </div>
             <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Pagamentos</p>
+              <p className="text-xs text-zinc-500 uppercase">Pagamentos</p>
               <p className="text-emerald-400 font-mono font-bold">R$ {formatCurrency(totalPayments)}</p>
             </div>
             <div className="bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase">Saldo</p>
+              <p className="text-xs text-zinc-500 uppercase">Saldo</p>
               <p className={`${remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>R$ {formatCurrency(remaining)}</p>
             </div>
           </div>
@@ -219,7 +219,7 @@ export const Passivos: React.FC<PassivosProps> = ({
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold">Compras (competência)</p>
+            <p className="text-xs text-zinc-500 uppercase font-bold">Compras (competência)</p>
             {charges.length === 0 ? (
               <EmptyState title="Sem compras no ciclo" description="Sem lançamentos de crédito nesta competência." />
             ) : (
@@ -229,7 +229,7 @@ export const Passivos: React.FC<PassivosProps> = ({
                   <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-4 py-2">
                     <div>
                       <p className="text-white">{t.description}</p>
-                      <p className="text-[10px] text-zinc-500">
+                      <p className="text-xs text-zinc-500">
                         {formatShortDate(t.date)} · {formatKindLabel(t.kind)}
                       </p>
                     </div>
@@ -240,7 +240,7 @@ export const Passivos: React.FC<PassivosProps> = ({
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold">Pagamentos (caixa)</p>
+            <p className="text-xs text-zinc-500 uppercase font-bold">Pagamentos (caixa)</p>
             {payments.length === 0 ? (
               <EmptyState title="Sem pagamentos neste mês" description="Registre pagamentos para baixar o saldo." />
             ) : (
@@ -250,7 +250,7 @@ export const Passivos: React.FC<PassivosProps> = ({
                   <div key={t.id} className="flex justify-between text-sm bg-zinc-950/40 border border-zinc-800 rounded-lg px-4 py-2">
                     <div>
                       <p className="text-white">{t.description}</p>
-                      <p className="text-[10px] text-zinc-500">
+                      <p className="text-xs text-zinc-500">
                         {formatShortDate(t.date)} · {formatKindLabel(t.kind)}
                       </p>
                     </div>
@@ -261,7 +261,7 @@ export const Passivos: React.FC<PassivosProps> = ({
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold">Parcelamentos vinculados</p>
+            <p className="text-xs text-zinc-500 uppercase font-bold">Parcelamentos vinculados</p>
             {relatedPlans.length === 0 && <p className="text-xs text-zinc-500">Sem parcelamentos ativos.</p>}
             {relatedPlans.map((plan) => {
               const pendingTx = transactions.filter((t) => t.installment?.groupId === plan.id && t.status === 'pending');
@@ -269,19 +269,19 @@ export const Passivos: React.FC<PassivosProps> = ({
             <div key={plan.id} className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800 rounded-lg px-4 py-2">
               <div>
                 <p className="text-sm text-white font-bold">{plan.description}</p>
-                <p className="text-[10px] text-zinc-500">{plan.totalInstallments}x · faltam {pendingTx.length}</p>
+                <p className="text-xs text-zinc-500">{plan.totalInstallments}x · faltam {pendingTx.length}</p>
               </div>
               <div className="flex gap-2">
                     <Button
                       variant="ghost"
-                      className="text-[10px] normal-case tracking-wide"
+                      className="text-xs normal-case tracking-wide"
                       onClick={() => handleCancelPlan(plan.id)}
                     >
                       Cancelar futuras
                     </Button>
                     <Button
                       variant="secondary"
-                      className="text-[10px] normal-case tracking-wide"
+                      className="text-xs normal-case tracking-wide"
                       onClick={() => handleFinishPlan(plan.id)}
                     >
                       Quitar restantes
@@ -297,7 +297,7 @@ export const Passivos: React.FC<PassivosProps> = ({
       {/* Edit Form Modal/Overlay */}
       {isEditing && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-2xl border border-zinc-700 space-y-4 animate-in zoom-in-95">
+            <div className="bg-zinc-900 w-full max-w-sm p-6 rounded-2xl border border-zinc-700 space-y-4  ">
                 <h4 className="text-white font-bold text-lg">{editingId ? 'Editar Cartão' : 'Novo Cartão'}</h4>
                 <input
                   className="w-full bg-zinc-950 px-4 py-2 rounded-xl text-white border border-zinc-800 focus:border-indigo-500 focus:outline-none"

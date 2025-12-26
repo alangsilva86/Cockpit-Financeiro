@@ -307,7 +307,7 @@ export const Reports: React.FC<ReportsProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950 animate-in fade-in pb-16">
+    <div className="flex flex-col h-full bg-zinc-950   pb-16">
       
       {/* 1. Header & Tabs */}
       <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-zinc-900 pb-2">
@@ -366,7 +366,7 @@ export const Reports: React.FC<ReportsProps> = ({
         <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/60 p-4 backdrop-blur-sm shadow-[0_15px_35px_rgba(2,6,23,0.65)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Percurso guiado</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Percurso guiado</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-white">{currentPhase.title}</span>
                 <span className="text-[11px] uppercase tracking-[0.35em] text-zinc-500">
@@ -378,7 +378,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 Próximo passo: {currentPhase.nextStage}
               </p>
             </div>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.45em] text-zinc-500">Fluxo contínuo</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.45em] text-zinc-500">Fluxo contínuo</span>
           </div>
           <div className="grid gap-4 pt-4 sm:grid-cols-3">
             {phaseDetails.map((phase) => {
@@ -392,9 +392,9 @@ export const Reports: React.FC<ReportsProps> = ({
                       : 'border-zinc-800 bg-zinc-950/30'
                   }`}
                 >
-                  <p className={`text-[10px] uppercase tracking-[0.3em] ${phase.accent}`}>{phase.title}</p>
+                  <p className={`text-xs uppercase tracking-[0.3em] ${phase.accent}`}>{phase.title}</p>
                   <p className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-zinc-200'}`}>{phase.description}</p>
-                  <p className="text-[10px] text-zinc-500">Próximo: {phase.nextStage}</p>
+                  <p className="text-xs text-zinc-500">Próximo: {phase.nextStage}</p>
                 </div>
               );
             })}
@@ -421,7 +421,7 @@ export const Reports: React.FC<ReportsProps> = ({
 
         {/* === FILTER CHIPS === */}
         <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 px-4 py-4 space-y-4 backdrop-blur-sm">
-          <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 ">
             {(['All', 'alan', 'kellen', 'casa'] as const).map((p) => (
               <Chip
                 key={p}
@@ -436,7 +436,7 @@ export const Reports: React.FC<ReportsProps> = ({
               aria-label="Filtrar por forma de pagamento"
               value={paymentFilter}
               onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
-              className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
+              className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 rounded-xl px-4 py-2"
             >
               {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
                 <option key={p} value={p}>
@@ -448,7 +448,7 @@ export const Reports: React.FC<ReportsProps> = ({
               aria-label="Filtrar por status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'All' | 'paid' | 'pending')}
-              className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
+              className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 rounded-xl px-4 py-2"
             >
               <option value="All">Status</option>
               <option value="paid">Pagos</option>
@@ -461,23 +461,23 @@ export const Reports: React.FC<ReportsProps> = ({
         {/* === SUMMARY CARDS === */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Custo Real (Vida + Juros)</span>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Custo Real (Vida + Juros)</span>
             <span className="text-xl font-bold text-white block">R$ {formatCurrency(stats.realCost)}</span>
-            <span className="text-[10px] text-zinc-600">Sem rolagens/neutros</span>
+            <span className="text-xs text-zinc-600">Sem rolagens/neutros</span>
           </div>
           <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-             <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Total Movimentado</span>
+             <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Total Movimentado</span>
              <span className="text-xl font-bold text-zinc-400 block">R$ {formatCurrency(stats.totalPaid)}</span>
-             <span className="text-[10px] text-zinc-600">Inclui rolagens</span>
+             <span className="text-xs text-zinc-600">Inclui rolagens</span>
           </div>
         </div>
 
         {/* Charts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
-          <div className="rounded-[32px] border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
+          <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Custo de Vida por categoria</span>
-              <span className="text-[10px] text-zinc-500">{lifeChartData.length} itens</span>
+              <span className="text-xs text-zinc-500">{lifeChartData.length} itens</span>
             </div>
             <div className="flex-1 min-h-[140px] w-full flex items-center justify-center">
               <div className="w-full h-full min-h-[140px] min-w-0">
@@ -495,7 +495,7 @@ export const Reports: React.FC<ReportsProps> = ({
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
+          <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Linha do tempo de gastos</span>
               <div className="flex gap-2 text-[11px]">
@@ -544,22 +544,22 @@ export const Reports: React.FC<ReportsProps> = ({
         <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="text-xs text-zinc-400 uppercase font-bold">Parcelamentos</h4>
-            <span className="text-[10px] text-zinc-500">{plansView.length} ativos</span>
+            <span className="text-xs text-zinc-500">{plansView.length} ativos</span>
           </div>
           {plansView.length === 0 && <p className="text-xs text-zinc-500">Nenhum parcelamento.</p>}
           {plansView.map(({ plan: installmentPlan, remaining, nextDate, totalGenerated }) => (
             <div key={installmentPlan.id} className="border border-zinc-800 rounded-xl p-4 flex justify-between items-start gap-4">
               <div>
                 <p className="text-sm text-white font-bold">{installmentPlan.description}</p>
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-xs text-zinc-500">
                   {installmentPlan.totalInstallments}x de R$ {formatCurrency(Number(installmentPlan.perInstallmentAmount || 0))} · cartão {installmentPlan.cardId || '-'}
                 </p>
-                <p className="text-[10px] text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
+                <p className="text-xs text-zinc-500">Restam {remaining} parcelas · próxima {nextDate ? new Date(nextDate).toLocaleDateString('pt-BR') : '-'}</p>
               </div>
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
-                  className="text-[10px] normal-case tracking-wide"
+                  className="text-xs normal-case tracking-wide"
                   onClick={() => handleCancelPlan(installmentPlan.id)}
                   disabled={!onUpdateInstallments}
                 >
@@ -567,7 +567,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 </Button>
                 <Button
                   variant="secondary"
-                  className="text-[10px] normal-case tracking-wide"
+                  className="text-xs normal-case tracking-wide"
                   disabled={!onUpdateInstallments}
                   onClick={() =>
                     onUpdateInstallments?.(
@@ -591,7 +591,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 >
                   Quitar restantes
                 </Button>
-                <span className="text-[10px] text-zinc-500 self-center">{totalGenerated} lanç.</span>
+                <span className="text-xs text-zinc-500 self-center">{totalGenerated} lanç.</span>
               </div>
             </div>
           ))}
@@ -623,14 +623,14 @@ export const Reports: React.FC<ReportsProps> = ({
 
              {/* Expanded Category List */}
              {showLifeDetails && activeTab === 'past' && (
-                 <div className="mt-4 space-y-2 animate-in slide-in-from-top-2 pt-2 border-t border-zinc-800/50">
-                    <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-2">
+                 <div className="mt-4 space-y-2   pt-2 border-t border-zinc-800/50">
+                    <div className="flex justify-between items-center text-xs text-zinc-500 uppercase font-bold tracking-wider mb-2">
                         <span>Categoria</span>
                         <span>% do Custo de Vida</span>
                     </div>
                     {lifeCostCategories.map(cat => (
                         <div key={cat.name} className="space-y-1">
-                            <div className="flex justify-between text-[10px] text-zinc-300">
+                            <div className="flex justify-between text-xs text-zinc-300">
                                 <span>{cat.name}</span>
                                 <span>{Math.round(cat.percentage)}% <span className="text-zinc-500 ml-1">(R$ {formatCurrency(cat.amount)})</span></span>
                             </div>
@@ -639,7 +639,7 @@ export const Reports: React.FC<ReportsProps> = ({
                             </div>
                         </div>
                     ))}
-                    {lifeCostCategories.length === 0 && <p className="text-[10px] text-zinc-500 italic">Sem dados de categorias.</p>}
+                    {lifeCostCategories.length === 0 && <p className="text-xs text-zinc-500 italic">Sem dados de categorias.</p>}
                  </div>
              )}
            </div>

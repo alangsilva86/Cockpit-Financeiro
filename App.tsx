@@ -195,7 +195,6 @@ const App: React.FC = () => {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [showTrustDetails, setShowTrustDetails] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const undoSnapshotRef = useRef<AppState | null>(null);
   const [undoExpiresAt, setUndoExpiresAt] = useState<number | null>(null);
