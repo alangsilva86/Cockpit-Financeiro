@@ -1,3 +1,4 @@
+import { getActorFromRequest } from '../../server/actors';
 import { authorizeAdmin } from '../../server/auth';
 import { toMonthStart } from '../../server/dates';
 import { entityToUuid, isUuid, workspaceToUuid } from '../../server/ids';
@@ -37,6 +38,11 @@ export default async function handler(req: any, res: any) {
 
   if (!workspaceId) {
     return res.status(400).json({ error: 'workspaceId is required' });
+  }
+
+  const { actorDeviceId } = getActorFromRequest(req);
+  if (!actorDeviceId) {
+    return res.status(400).json({ error: 'actor_device_id is required' });
   }
 
   const workspaceKey = String(workspaceId);

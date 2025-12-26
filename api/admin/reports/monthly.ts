@@ -1,3 +1,4 @@
+import { getActorFromRequest } from '../../../server/actors';
 import { authorizeAdmin } from '../../../server/auth';
 import { toMonthStart } from '../../../server/dates';
 import { workspaceToUuid } from '../../../server/ids';
@@ -18,6 +19,11 @@ export default async function handler(req: any, res: any) {
   const { workspaceId, month } = req.query || {};
   if (!workspaceId || !month) {
     return res.status(400).json({ error: 'workspaceId and month are required' });
+  }
+
+  const { actorDeviceId } = getActorFromRequest(req);
+  if (!actorDeviceId) {
+    return res.status(400).json({ error: 'actor_device_id is required' });
   }
 
   const monthStart = toMonthStart(String(month));

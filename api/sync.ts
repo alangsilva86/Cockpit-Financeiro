@@ -86,10 +86,11 @@ const upsertState = async (workspaceId: string, state: AppState, schemaVersion: 
   });
 };
 
-const ensureWorkspace = async (workspaceUuid: string, name: string, ownerUserId?: string | null) => {
+const ensureWorkspace = async (workspaceUuid: string, externalKey: string, ownerUserId?: string | null) => {
   const row: Record<string, unknown> = {
     id: workspaceUuid,
-    name: name || 'default',
+    name: externalKey || 'default',
+    external_key: externalKey || 'default',
   };
   if (ownerUserId && isUuid(ownerUserId)) {
     row.owner_user_id = ownerUserId;
@@ -145,6 +146,10 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    const { actorUserId, actorDeviceId } = getActorFromRequest(req);
+    if (!actorDeviceId) {
+      return res.status(400).json({ error: 'actor_device_id is required' });
+    }
     const base: AppState = {
       schemaVersion: 2,
       transactions: [],
@@ -219,8 +224,6 @@ export default async function handler(req: any, res: any) {
     mergedState.schemaVersion = resolvedSchemaVersion;
 
     await upsertState(key, mergedState, resolvedSchemaVersion, nextRevision);
-
-    const { actorUserId, actorDeviceId } = getActorFromRequest(req);
     const mapped = mapStateToRows(mergedState, key);
     await ensureWorkspace(mapped.workspaceUuid, key, actorUserId);
 

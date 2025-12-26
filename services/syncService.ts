@@ -5,6 +5,7 @@ const WORKSPACE_ID = import.meta.env.VITE_SYNC_WORKSPACE || 'default';
 const SYNC_KEY = import.meta.env.VITE_SYNC_KEY;
 const MIN_SYNC_INTERVAL_MS = 15000;
 const BACKOFF_STEPS_MS = [5000, 15000, 60000];
+const DEVICE_ID_KEY = 'cockpit-device-id';
 
 let lastAttemptAt = 0;
 let failureCount = 0;
@@ -29,6 +30,22 @@ const markFailure = (now = Date.now()) => {
 const resetBackoff = () => {
   failureCount = 0;
   nextRetryAt = 0;
+};
+
+const getDeviceId = () => {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const stored = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (stored) return stored;
+    const generated =
+      typeof window.crypto?.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(DEVICE_ID_KEY, generated);
+    return generated;
+  } catch (_err) {
+    return undefined;
+  }
 };
 
 const shouldSkipSync = (now: number) => {
@@ -69,7 +86,7 @@ export const syncAppState = async (state: AppState, options?: { force?: boolean 
         'Content-Type': 'application/json',
         ...(SYNC_KEY ? { 'x-sync-key': SYNC_KEY } : {}),
       },
-      body: JSON.stringify({ workspaceId: WORKSPACE_ID, state }),
+      body: JSON.stringify({ workspaceId: WORKSPACE_ID, state, deviceId: getDeviceId() }),
     });
 
     if (!response.ok) {

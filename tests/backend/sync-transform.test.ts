@@ -69,4 +69,56 @@ describe('sync mapping', () => {
     expect(rows.categories[0].id).toBe(rows.transactions[0].category_id);
     expect(rows.cards[0].id).toBe(rows.transactions[0].card_id);
   });
+
+  it('keeps installment_count consistent with the plan', () => {
+    const state: AppState = {
+      schemaVersion: 2,
+      transactions: [
+        {
+          id: 'tx-10',
+          date: '2025-01-10',
+          competenceMonth: '2025-01',
+          direction: 'out',
+          kind: 'expense',
+          amount: 100,
+          description: 'Parcelado',
+          paymentMethod: 'credit',
+          cardId: 'card-1',
+          status: 'pending',
+          installment: {
+            groupId: 'plan-1',
+            number: 1,
+            total: 12,
+            originalTotalAmount: 1000,
+            perInstallmentAmount: 100,
+            startDate: '2025-01-10',
+          },
+        },
+      ],
+      cards: [{ id: 'card-1', name: 'Nubank' }],
+      categories: [],
+      monthlyIncome: 0,
+      variableCap: 0,
+      installmentPlans: [
+        {
+          id: 'plan-1',
+          createdAt: '2025-01-10T00:00:00.000Z',
+          description: 'Plano 10x',
+          categoryId: 'Misc',
+          cardId: 'card-1',
+          purchaseDate: '2025-01-10',
+          firstInstallmentDate: '2025-01-10',
+          totalInstallments: 10,
+          totalAmount: 1000,
+          perInstallmentAmount: 100,
+          status: 'active',
+          remainingInstallments: 9,
+        },
+      ],
+      updatedAt: '2025-01-10T10:00:00.000Z',
+    };
+
+    const rows = mapStateToRows(state, 'workspace-demo', '2025-01-10T12:00:00.000Z');
+    expect(rows.transactions[0].installment_count).toBe(10);
+  });
 });

@@ -74,13 +74,13 @@ describe('admin flow (requires Supabase)', () => {
     const syncRes = await runHandler(syncHandler, {
       method: 'POST',
       headers: { 'x-sync-token': syncToken },
-      body: { workspaceId, state },
+      body: { workspaceId, state, deviceId: 'test-device' },
     });
     expect(syncRes.statusCode).toBe(200);
 
     const listRes = await runHandler(listHandler, {
       method: 'GET',
-      headers: { 'x-admin-token': adminSecret },
+      headers: { 'x-admin-token': adminSecret, 'x-device-id': 'test-device' },
       query: { workspaceId, month: '2025-02' },
     });
     expect(listRes.statusCode).toBe(200);
@@ -89,7 +89,7 @@ describe('admin flow (requires Supabase)', () => {
 
     const patchRes = await runHandler(transactionHandler, {
       method: 'PATCH',
-      headers: { 'x-admin-token': adminSecret },
+      headers: { 'x-admin-token': adminSecret, 'x-device-id': 'test-device' },
       query: { id: 'tx-1', workspaceId },
       body: { amount: 150 },
     });
@@ -98,7 +98,7 @@ describe('admin flow (requires Supabase)', () => {
 
     const deleteRes = await runHandler(transactionHandler, {
       method: 'DELETE',
-      headers: { 'x-admin-token': adminSecret },
+      headers: { 'x-admin-token': adminSecret, 'x-device-id': 'test-device' },
       query: { id: 'tx-1', workspaceId },
     });
     expect(deleteRes.statusCode).toBe(200);
@@ -106,7 +106,7 @@ describe('admin flow (requires Supabase)', () => {
 
     const restoreRes = await runHandler(restoreHandler, {
       method: 'POST',
-      headers: { 'x-admin-token': adminSecret },
+      headers: { 'x-admin-token': adminSecret, 'x-device-id': 'test-device' },
       query: { id: 'tx-1', workspaceId },
       body: {},
     });

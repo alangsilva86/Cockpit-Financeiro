@@ -48,12 +48,15 @@ create table if not exists public.app_states (
 ```
 
 ## Backend fintech (Supabase + Vercel)
-- Migração completa: `supabase/migrations/20250309010000_fintech_backend.sql` (tabelas, indices, views).
+- Migração base: `supabase/migrations/20250309010000_fintech_backend.sql` (tabelas, indices, views).
+- Guardrails: `supabase/migrations/20250309020000_backend_guardrails.sql` (external_key, constraints, indices parciais, trigram).
 - O backend persiste snapshot em `app_states` e explode entidades em `transactions`, `cards`, `categories`, `installment_plans`.
 - Para workspaceId que nao e UUID, o backend gera UUID deterministico para as tabelas relacionais.
+- `workspaces.external_key` guarda o workspaceId textual para join com `app_states.workspace_id`.
 
 ### Autenticacao
 - `/api/sync`: enviar `x-sync-token = HMAC_SHA256(SYNC_SECRET, workspaceId)` (hex). Opcionalmente `x-sync-key` com `SYNC_SHARED_KEY`.
+- `/api/sync` e `/api/admin/*`: enviar `deviceId` no body (sync) ou `x-device-id` no header (admin).
 - `/api/admin/*`: enviar `x-admin-token = ADMIN_SECRET` (ou `Authorization: Bearer ...`).
 
 ### Exemplos de chamadas (curl)
@@ -63,13 +66,14 @@ SYNC_TOKEN=$(node -e "const crypto=require('crypto'); const secret=process.env.S
 curl -X POST http://localhost:5173/api/sync \
   -H "Content-Type: application/json" \
   -H "x-sync-token: $SYNC_TOKEN" \
-  -d '{"workspaceId":"default","schemaVersion":2,"state":{"schemaVersion":2,"transactions":[],"cards":[],"categories":[],"monthlyIncome":0,"variableCap":0,"installmentPlans":[]}}'
+  -d '{"workspaceId":"default","schemaVersion":2,"deviceId":"device-123","state":{"schemaVersion":2,"transactions":[],"cards":[],"categories":[],"monthlyIncome":0,"variableCap":0,"installmentPlans":[]}}'
 ```
 
 Listar transacoes:
 ```bash
 curl "http://localhost:5173/api/admin/transactions?workspaceId=default&month=2025-02" \
-  -H "x-admin-token: $ADMIN_SECRET"
+  -H "x-admin-token: $ADMIN_SECRET" \
+  -H "x-device-id: device-123"
 ```
 
 Editar transacao:
@@ -77,25 +81,29 @@ Editar transacao:
 curl -X PATCH "http://localhost:5173/api/admin/transactions/tx-1?workspaceId=default" \
   -H "Content-Type: application/json" \
   -H "x-admin-token: $ADMIN_SECRET" \
+  -H "x-device-id: device-123" \
   -d '{"amount":150,"description":"Ajuste manual"}'
 ```
 
 Soft delete:
 ```bash
 curl -X DELETE "http://localhost:5173/api/admin/transactions/tx-1?workspaceId=default" \
-  -H "x-admin-token: $ADMIN_SECRET"
+  -H "x-admin-token: $ADMIN_SECRET" \
+  -H "x-device-id: device-123"
 ```
 
 Restore:
 ```bash
 curl -X POST "http://localhost:5173/api/admin/transactions/tx-1/restore?workspaceId=default" \
-  -H "x-admin-token: $ADMIN_SECRET"
+  -H "x-admin-token: $ADMIN_SECRET" \
+  -H "x-device-id: device-123"
 ```
 
 Relatorio mensal:
 ```bash
 curl "http://localhost:5173/api/admin/reports/monthly?workspaceId=default&month=2025-02" \
-  -H "x-admin-token: $ADMIN_SECRET"
+  -H "x-admin-token: $ADMIN_SECRET" \
+  -H "x-device-id: device-123"
 ```
 
 ### Testes de backend

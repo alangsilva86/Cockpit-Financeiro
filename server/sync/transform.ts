@@ -194,6 +194,9 @@ export const mapStateToRows = (state: AppState, workspaceId: string, nowIso = ne
   const transactionRows: TransactionRow[] = transactions.map((tx) => {
     const occurredAt = toDateOnly(tx.date) || defaultDateOnly();
     const competenceMonth = ensureMonthStart(tx.competenceMonth || tx.date);
+    const planSourceId = tx.installment?.groupId;
+    const planRow = planSourceId ? planById.get(planSourceId) : undefined;
+    const installmentCount = planRow?.installment_count ?? tx.installment?.total ?? null;
     const row: TransactionRow = {
       id: entityToUuid(workspaceUuid, 'transaction', tx.id),
       workspace_id: workspaceUuid,
@@ -211,7 +214,7 @@ export const mapStateToRows = (state: AppState, workspaceId: string, nowIso = ne
         ? entityToUuid(workspaceUuid, 'plan', tx.installment.groupId)
         : null,
       installment_index: tx.installment?.number ?? null,
-      installment_count: tx.installment?.total ?? null,
+      installment_count: installmentCount,
       created_at: tx.createdAt || nowIso,
       updated_at: tx.updatedAt || nowIso,
     };
