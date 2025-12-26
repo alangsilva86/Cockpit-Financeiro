@@ -57,11 +57,11 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
   }, [monthlyIncome, variableCap]);
 
   return (
-    <div className="p-4 space-y-6  ">
+    <div className="space-y-6 p-4  ">
       
       {/* Header */}
-      <div className="flex items-center gap-2 mb-6">
-        <div className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center text-zinc-500">
+      <div className="mb-6 flex items-center gap-2">
+        <div className="flex size-10 items-center justify-center rounded-full bg-zinc-900 text-zinc-500">
           <Icons.Plan size={20} />
         </div>
         <div>
@@ -71,38 +71,38 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
       </div>
 
       {/* Generate Month Action */}
-      <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 p-4 rounded-2xl border border-zinc-700">
-        <div className="flex gap-2 mb-4">
+      <div className="rounded-2xl border border-zinc-700 bg-gradient-to-br from-zinc-800 to-zinc-900 p-4">
+        <div className="mb-4 flex gap-2">
           <Icons.Copy className="text-blue-400" size={24} />
           <div>
-            <h3 className="text-white font-bold">Gerar Próximo Mês</h3>
-            <p className="text-xs text-zinc-400 mt-1">
+            <h3 className="font-bold text-white">Gerar Próximo Mês</h3>
+            <p className="mt-1 text-xs text-zinc-400">
               Copiar custos fixos e estimativas do mês atual para o próximo. Cria um roteiro inicial.
             </p>
           </div>
         </div>
         <Button
           variant="primary"
-          className="w-full normal-case gap-2"
+          className="w-full gap-2 normal-case"
           onClick={onGenerateNextMonth}
         >
           <Icons.Calendar size={18} />
           Gerar Roteiro de {nextMonthLabel}
         </Button>
         {lastGeneration && (
-          <p className="text-xs text-blue-200 mt-2">{lastGeneration}</p>
+          <p className="mt-2 text-xs text-blue-200">{lastGeneration}</p>
         )}
       </div>
 
       {/* Next month forecast */}
-      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-2">
+      <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider">Previsão {nextCompetence}</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">Previsão {nextCompetence}</h3>
           <span className="text-xs text-zinc-500">Cartão + variáveis</span>
         </div>
         <div className="space-y-2">
           {nextMonthForecast.creditByCard.map(({ card, total }) => (
-            <div key={card.id} className="flex justify-between text-sm bg-zinc-950/50 border border-zinc-800 rounded-lg px-4 py-2">
+            <div key={card.id} className="flex justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-2 text-sm">
               <span className="text-zinc-300">{card.name}</span>
               <span className="font-mono text-zinc-100">R$ {total.toLocaleString()}</span>
             </div>
@@ -114,23 +114,23 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
       </div>
 
       {/* Caps */}
-      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider mb-4">Limites e Tetos</h3>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-zinc-400">Limites e Tetos</h3>
         <div className="space-y-2">
           <div>
-            <label className="text-xs text-zinc-400 uppercase font-bold">Renda Recorrente (R$)</label>
+            <label className="text-xs font-bold uppercase text-zinc-400">Renda Recorrente (R$)</label>
             <input 
               type="number" 
               inputMode="decimal"
               value={localIncome}
               onChange={(e) => setLocalIncome(parseFloat(e.target.value) || 0)}
-              className="w-full bg-zinc-950 px-4 py-2 rounded-xl border border-zinc-800 text-white mt-1 focus:border-emerald-500 focus:outline-none"
+              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
             />
           </div>
           <div>
-            <div className="flex justify-between text-xs text-zinc-400 uppercase font-bold">
+            <div className="flex justify-between text-xs font-bold uppercase text-zinc-400">
               <span>Teto Variável</span>
-              <span className="text-emerald-400 font-mono">R$ {localVariableCap.toLocaleString()}</span>
+              <span className="font-mono text-emerald-400">R$ {localVariableCap.toLocaleString()}</span>
             </div>
             <input 
               type="range" 
@@ -139,9 +139,9 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
               step={500}
               value={localVariableCap}
               onChange={(e) => setLocalVariableCap(parseFloat(e.target.value) || 0)}
-              className="w-full mt-2 accent-emerald-500"
+              className="mt-2 w-full accent-emerald-500"
             />
-            <p className="text-xs text-zinc-500 mt-1">Use como semáforo do mês (mercado, lazer, compras).</p>
+            <p className="mt-1 text-xs text-zinc-500">Use como semáforo do mês (mercado, lazer, compras).</p>
           </div>
           <Button
             variant="secondary"
@@ -154,9 +154,9 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
       </div>
 
       {/* Category Management */}
-      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-2">
-         <div className="flex justify-between items-center mb-4">
-           <h3 className="text-zinc-400 text-sm font-bold uppercase tracking-wider">Categorias de Gasto</h3>
+      <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+         <div className="mb-4 flex items-center justify-between">
+           <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">Categorias de Gasto</h3>
            <IconButton
              aria-label="Adicionar categoria"
              icon={<Icons.Add size={20} />}
@@ -166,15 +166,15 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
          </div>
          
          {isAddingCat && (
-           <form onSubmit={handleAddCat} className="flex gap-2 mb-4  ">
+           <form onSubmit={handleAddCat} className="mb-4 flex gap-2  ">
              <input 
                autoFocus
-               className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none"
+               className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
                placeholder="Nova Categoria..."
                value={newCat}
                onChange={e => setNewCat(e.target.value)}
              />
-             <Button type="submit" variant="secondary" className="normal-case text-sm">
+             <Button type="submit" variant="secondary" className="text-sm normal-case">
                OK
              </Button>
            </form>
@@ -185,10 +185,10 @@ export const Planning: React.FC<PlanningProps> = ({ onGenerateNextMonth, variabl
              <Chip key={cat} label={cat} />
            ))}
          </div>
-         <p className="text-xs text-zinc-600 mt-2">A IA usará estas categorias para classificar novos gastos automaticamente.</p>
+         <p className="mt-2 text-xs text-zinc-600">A IA usará estas categorias para classificar novos gastos automaticamente.</p>
       </div>
       
-      <p className="text-center text-xs text-zinc-600 mt-8">
+      <p className="mt-8 text-center text-xs text-zinc-600">
         &ldquo;O plano é nada, o planejamento é tudo.&rdquo;
       </p>
     </div>

@@ -20,6 +20,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LIxzL7o0UetRiHgSRL7seU
    - `VITE_SYNC_WORKSPACE` (namespace compartilhado entre dispositivos)
    - `VITE_SYNC_KEY` (opcional, chave simples enviada ao backend)
    - `SYNC_SHARED_KEY` (opcional, validado no backend do sync)
+   - `SYNC_SECRET` (HMAC para `/api/sync`; recomendado)
+   - `ADMIN_SECRET` (token para endpoints `/api/admin/*`)
    - `SUPABASE_URL` (server-side)
    - `SUPABASE_SERVICE_ROLE_KEY` (server-side, **não** vai para o bundle)
    - `SUPABASE_SYNC_SCHEMA` (opcional, default `public`)
@@ -35,8 +37,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LIxzL7o0UetRiHgSRL7seU
 
 ## Sync multi-dispositivo
 - O frontend chama `/api/sync` e compartilha o estado por `VITE_SYNC_WORKSPACE`.
-- Para produção, configure Supabase (server-side) e `SYNC_SHARED_KEY` opcional para proteger gravações.
-- Tabela esperada (SQL):
+- Para produção, configure Supabase (server-side) e `SYNC_SECRET` (ou `SYNC_SHARED_KEY`) para proteger gravações.
+- Tabela esperada (SQL) para snapshot:
 ```sql
 create table if not exists public.app_states (
   workspace_id text primary key,
@@ -44,6 +46,61 @@ create table if not exists public.app_states (
   updated_at timestamptz not null default now()
 );
 ```
+
+## Backend fintech (Supabase + Vercel)
+- Migração completa: `supabase/migrations/20250309010000_fintech_backend.sql` (tabelas, indices, views).
+- O backend persiste snapshot em `app_states` e explode entidades em `transactions`, `cards`, `categories`, `installment_plans`.
+- Para workspaceId que nao e UUID, o backend gera UUID deterministico para as tabelas relacionais.
+
+### Autenticacao
+- `/api/sync`: enviar `x-sync-token = HMAC_SHA256(SYNC_SECRET, workspaceId)` (hex). Opcionalmente `x-sync-key` com `SYNC_SHARED_KEY`.
+- `/api/admin/*`: enviar `x-admin-token = ADMIN_SECRET` (ou `Authorization: Bearer ...`).
+
+### Exemplos de chamadas (curl)
+Sync:
+```bash
+SYNC_TOKEN=$(node -e "const crypto=require('crypto'); const secret=process.env.SYNC_SECRET||'dev'; const ws='default'; console.log(crypto.createHmac('sha256', secret).update(ws).digest('hex'));")
+curl -X POST http://localhost:5173/api/sync \
+  -H "Content-Type: application/json" \
+  -H "x-sync-token: $SYNC_TOKEN" \
+  -d '{"workspaceId":"default","schemaVersion":2,"state":{"schemaVersion":2,"transactions":[],"cards":[],"categories":[],"monthlyIncome":0,"variableCap":0,"installmentPlans":[]}}'
+```
+
+Listar transacoes:
+```bash
+curl "http://localhost:5173/api/admin/transactions?workspaceId=default&month=2025-02" \
+  -H "x-admin-token: $ADMIN_SECRET"
+```
+
+Editar transacao:
+```bash
+curl -X PATCH "http://localhost:5173/api/admin/transactions/tx-1?workspaceId=default" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-token: $ADMIN_SECRET" \
+  -d '{"amount":150,"description":"Ajuste manual"}'
+```
+
+Soft delete:
+```bash
+curl -X DELETE "http://localhost:5173/api/admin/transactions/tx-1?workspaceId=default" \
+  -H "x-admin-token: $ADMIN_SECRET"
+```
+
+Restore:
+```bash
+curl -X POST "http://localhost:5173/api/admin/transactions/tx-1/restore?workspaceId=default" \
+  -H "x-admin-token: $ADMIN_SECRET"
+```
+
+Relatorio mensal:
+```bash
+curl "http://localhost:5173/api/admin/reports/monthly?workspaceId=default&month=2025-02" \
+  -H "x-admin-token: $ADMIN_SECRET"
+```
+
+### Testes de backend
+- Unit: `npm run test:backend`
+- Integration: requer `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SYNC_SECRET`, `ADMIN_SECRET` (opcional `SUPABASE_TEST_WORKSPACE`).
 
 ## Fluxos de teste (QA)
 1. Setup (usuário novo):

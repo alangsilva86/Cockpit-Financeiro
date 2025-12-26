@@ -1,0 +1,12 @@
+import { isUuid } from './ids';
+
+export const getActorFromRequest = (req: any) => {
+  const userHeader =
+    req?.headers?.['x-actor-user-id'] ||
+    req?.headers?.['x-user-id'] ||
+    req?.body?.userId;
+  const deviceHeader = req?.headers?.['x-device-id'] || req?.body?.deviceId;
+  const actorUserId = typeof userHeader === 'string' && isUuid(userHeader) ? userHeader : null;
+  const actorDeviceId = typeof deviceHeader === 'string' ? deviceHeader : null;
+  return { actorUserId, actorDeviceId };
+};

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint components/ui components/Passivos.tsx components/Planning.tsx components/Reports.tsx",
     "test": "npm run test:ui",
+    "test:backend": "vitest run --config vitest.config.ts",
     "test:ui": "playwright test",
     "lhci": "lhci autorun --config=lighthouserc.json",
     "check:ci": "npm run lint && npm run test:ui && npm run lhci"
@@ -35,6 +36,7 @@
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-tailwindcss": "^3.10.0",
-    "eslint-plugin-custom-spacing": "file:eslint-plugin-custom-spacing"
+    "eslint-plugin-custom-spacing": "file:eslint-plugin-custom-spacing",
+    "vitest": "^1.6.0"
   }
 }

@@ -1,38 +1,14 @@
 import type { AppState, Card, InstallmentPlan, Transaction } from '../types';
+import { getActorFromRequest } from '../server/actors';
+import { insertAuditEvent } from '../server/audit';
+import { authorizeSync } from '../server/auth';
+import { isUuid } from '../server/ids';
+import { mapStateToRows } from '../server/sync/transform';
+import { isSupabaseConfigured, requestSupabase } from '../server/supabase';
 
 const nowIso = () => new Date().toISOString();
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
-const SUPABASE_SCHEMA = process.env.SUPABASE_SYNC_SCHEMA || 'public';
 const SUPABASE_TABLE = process.env.SUPABASE_SYNC_TABLE || 'app_states';
-
-const withTimeout = async <T>(promise: Promise<T>, ms = 8000): Promise<T> => {
-  let timer: NodeJS.Timeout;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('timeout')), ms);
-  });
-  const result = await Promise.race([promise, timeout]);
-  clearTimeout(timer!);
-  return result as T;
-};
-
-const supabaseHeaders = () => {
-  if (!SUPABASE_KEY) return {};
-  const schemaHeaders =
-    SUPABASE_SCHEMA && SUPABASE_SCHEMA !== 'public'
-      ? { 'Accept-Profile': SUPABASE_SCHEMA, 'Content-Profile': SUPABASE_SCHEMA }
-      : {};
-  return {
-    apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
-    'Content-Type': 'application/json',
-    ...schemaHeaders,
-  };
-};
-
-const buildSupabaseUrl = (query: string) => {
-  return `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}${query}`;
-};
+const BATCH_SIZE = Number(process.env.SYNC_BATCH_SIZE || 250);
 
 const getTimestamp = (value?: string) => {
   if (!value) return 0;
@@ -62,6 +38,7 @@ const normalizeIncoming = (state: AppState): AppState => {
     transactions: (state.transactions || []).map((t) => ({ ...t, needsSync: false })),
     cards: state.cards || [],
     installmentPlans: state.installmentPlans || [],
+    categories: state.categories || [],
   };
 };
 
@@ -69,58 +46,102 @@ type StoredRow = {
   workspace_id: string;
   state: AppState;
   updated_at?: string;
+  schema_version?: number;
+  revision?: number;
 };
 
-const fetchStoredState = async (workspaceId: string): Promise<AppState | null> => {
-  const url = buildSupabaseUrl(`?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=workspace_id,state,updated_at`);
-  const res = await withTimeout(fetch(url, { headers: supabaseHeaders() }));
-  if (!res.ok) {
-    throw new Error(`supabase fetch failed ${res.status}`);
-  }
+const fetchStoredState = async (workspaceId: string) => {
+  const query = `workspace_id=eq.${encodeURIComponent(
+    workspaceId
+  )}&select=workspace_id,state,updated_at,schema_version,revision`;
+  const res = await requestSupabase(SUPABASE_TABLE, { query });
   const rows = (await res.json()) as StoredRow[];
   const row = rows?.[0];
   if (!row?.state) return null;
   const updatedAt = row.state.updatedAt || row.updated_at || nowIso();
-  return normalizeIncoming({ ...row.state, updatedAt });
+  return {
+    state: normalizeIncoming({ ...row.state, updatedAt }),
+    schemaVersion: Number(row.schema_version ?? row.state.schemaVersion ?? 1),
+    revision: Number(row.revision ?? 0),
+  };
 };
 
-const upsertState = async (workspaceId: string, state: AppState) => {
+const upsertState = async (workspaceId: string, state: AppState, schemaVersion: number, revision: number) => {
   const payload = [
     {
       workspace_id: workspaceId,
       state,
       updated_at: state.updatedAt || nowIso(),
+      schema_version: schemaVersion,
+      revision,
     },
   ];
-  const url = buildSupabaseUrl(`?on_conflict=workspace_id`);
-  const res = await withTimeout(
-    fetch(url, {
+  await requestSupabase(SUPABASE_TABLE, {
+    method: 'POST',
+    query: 'on_conflict=workspace_id',
+    headers: {
+      Prefer: 'resolution=merge-duplicates, return=minimal',
+    },
+    body: payload,
+  });
+};
+
+const ensureWorkspace = async (workspaceUuid: string, name: string, ownerUserId?: string | null) => {
+  const row: Record<string, unknown> = {
+    id: workspaceUuid,
+    name: name || 'default',
+  };
+  if (ownerUserId && isUuid(ownerUserId)) {
+    row.owner_user_id = ownerUserId;
+  }
+  const payload = [row];
+  await requestSupabase('workspaces', {
+    method: 'POST',
+    query: 'on_conflict=id',
+    headers: {
+      Prefer: 'resolution=merge-duplicates, return=minimal',
+    },
+    body: payload,
+  });
+};
+
+const chunk = <T>(items: T[], size: number) => {
+  if (size <= 0) return [items];
+  const batches: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size));
+  }
+  return batches;
+};
+
+const upsertBatches = async (table: string, rows: Record<string, unknown>[], onConflict = 'id') => {
+  if (!rows.length) return;
+  const batches = chunk(rows, BATCH_SIZE);
+  for (const batch of batches) {
+    await requestSupabase(table, {
       method: 'POST',
+      query: `on_conflict=${onConflict}`,
       headers: {
-        ...supabaseHeaders(),
-        Prefer: 'resolution=merge-duplicates, return=representation',
+        Prefer: 'resolution=merge-duplicates, return=minimal',
       },
-      body: JSON.stringify(payload),
-    })
-  );
-  if (!res.ok) {
-    throw new Error(`supabase upsert failed ${res.status}`);
+      body: batch,
+    });
   }
 };
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { workspaceId, state } = req.body || {};
+  const { workspaceId, state, schemaVersion, revision } = req.body || {};
   const key = (workspaceId || 'default').toString();
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
+  if (!isSupabaseConfigured()) {
     return res.status(503).json({ error: 'Supabase not configured' });
   }
 
-  const requiredKey = process.env.SYNC_SHARED_KEY;
-  const providedKey = req.headers['x-sync-key'];
-  if (requiredKey && providedKey !== requiredKey) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  const authResult = authorizeSync(req, key);
+  if (!authResult.ok) {
+    const status = authResult.reason.toLowerCase().includes('not configured') ? 503 : 401;
+    return res.status(status).json({ error: authResult.reason });
   }
 
   try {
@@ -135,38 +156,103 @@ export default async function handler(req: any, res: any) {
       updatedAt: nowIso(),
     };
     const incoming = normalizeIncoming({ ...base, ...(state || {}) });
-
     const stored = await fetchStoredState(key);
-    if (!stored) {
-      const initial = { ...incoming, updatedAt: nowIso() };
-      await upsertState(key, initial);
-      return res.status(200).json({ state: initial, serverUpdatedAt: initial.updatedAt });
+
+    if (stored && revision !== undefined && revision !== null) {
+      const requestedRevision = Number(revision);
+      if (!Number.isNaN(requestedRevision) && requestedRevision !== stored.revision) {
+        return res.status(409).json({
+          error: 'Revision mismatch',
+          currentRevision: stored.revision,
+          serverUpdatedAt: stored.state.updatedAt,
+        });
+      }
     }
 
-    const mergedTransactions = mergeByUpdatedAt<Transaction>(stored.transactions || [], incoming.transactions || []);
-    const mergedCards = mergeByUpdatedAt<Card>(stored.cards || [], incoming.cards || []);
-    const mergedPlans = mergeByUpdatedAt<InstallmentPlan>(stored.installmentPlans || [], incoming.installmentPlans || []);
+    const mergedState = (() => {
+      if (!stored) {
+        return { ...incoming, updatedAt: nowIso() };
+      }
 
-    const mergedCategories = Array.from(new Set([...(stored.categories || []), ...(incoming.categories || [])])).sort();
+      const mergedTransactions = mergeByUpdatedAt<Transaction>(
+        stored.state.transactions || [],
+        incoming.transactions || []
+      );
+      const mergedCards = mergeByUpdatedAt<Card>(stored.state.cards || [], incoming.cards || []);
+      const mergedPlans = mergeByUpdatedAt<InstallmentPlan>(
+        stored.state.installmentPlans || [],
+        incoming.installmentPlans || []
+      );
 
-    const storedUpdated = getTimestamp(stored.updatedAt);
-    const incomingUpdated = getTimestamp(incoming.updatedAt);
+      const mergedCategories = Array.from(
+        new Set([...(stored.state.categories || []), ...(incoming.categories || [])])
+      ).sort();
 
-    const merged: AppState = {
-      ...stored,
-      ...incoming,
-      schemaVersion: Math.max(stored.schemaVersion || 1, incoming.schemaVersion || 1),
-      transactions: mergedTransactions,
-      cards: mergedCards,
-      installmentPlans: mergedPlans,
-      categories: mergedCategories,
-      monthlyIncome: incomingUpdated >= storedUpdated ? incoming.monthlyIncome : stored.monthlyIncome,
-      variableCap: incomingUpdated >= storedUpdated ? incoming.variableCap : stored.variableCap,
-      updatedAt: nowIso(),
-    };
+      const storedUpdated = getTimestamp(stored.state.updatedAt);
+      const incomingUpdated = getTimestamp(incoming.updatedAt);
+      const mergedSchema = Math.max(
+        stored.schemaVersion || 1,
+        incoming.schemaVersion || 1,
+        Number(schemaVersion || 0)
+      );
 
-    await upsertState(key, merged);
-    return res.status(200).json({ state: merged, serverUpdatedAt: merged.updatedAt });
+      return {
+        ...stored.state,
+        ...incoming,
+        schemaVersion: mergedSchema,
+        transactions: mergedTransactions,
+        cards: mergedCards,
+        installmentPlans: mergedPlans,
+        categories: mergedCategories,
+        monthlyIncome: incomingUpdated >= storedUpdated ? incoming.monthlyIncome : stored.state.monthlyIncome,
+        variableCap: incomingUpdated >= storedUpdated ? incoming.variableCap : stored.state.variableCap,
+        updatedAt: nowIso(),
+      };
+    })();
+
+    const nextRevision = (stored?.revision ?? 0) + 1;
+    const resolvedSchemaVersion = Math.max(
+      mergedState.schemaVersion || 1,
+      Number(schemaVersion || 0),
+      stored?.schemaVersion || 1
+    );
+    mergedState.schemaVersion = resolvedSchemaVersion;
+
+    await upsertState(key, mergedState, resolvedSchemaVersion, nextRevision);
+
+    const { actorUserId, actorDeviceId } = getActorFromRequest(req);
+    const mapped = mapStateToRows(mergedState, key);
+    await ensureWorkspace(mapped.workspaceUuid, key, actorUserId);
+
+    await upsertBatches('cards', mapped.cards);
+    await upsertBatches('categories', mapped.categories);
+    await upsertBatches('installment_plans', mapped.installmentPlans);
+    await upsertBatches('transactions', mapped.transactions);
+
+    await insertAuditEvent({
+      workspace_id: mapped.workspaceUuid,
+      entity_type: 'app_state',
+      entity_id: null,
+      action: 'sync',
+      after: {
+        revision: nextRevision,
+        schemaVersion: resolvedSchemaVersion,
+        counts: {
+          cards: mapped.cards.length,
+          categories: mapped.categories.length,
+          installmentPlans: mapped.installmentPlans.length,
+          transactions: mapped.transactions.length,
+        },
+      },
+      actor_user_id: actorUserId,
+      actor_device_id: actorDeviceId,
+    });
+
+    return res.status(200).json({
+      state: mergedState,
+      serverUpdatedAt: mergedState.updatedAt,
+      revision: nextRevision,
+    });
   } catch (error) {
     console.error('sync error', error);
     const message = error instanceof Error ? error.message : 'sync failed';
