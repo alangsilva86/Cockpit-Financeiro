@@ -808,7 +808,7 @@ const App: React.FC = () => {
       <main className="flex-1 relative flex flex-col h-screen overflow-hidden bg-black md:bg-zinc-950/50">
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth min-h-0">
+        <div className="flex-1 overflow-y-auto pb-32 md:pb-0 scroll-smooth min-h-0">
             {/* Desktop Center Container - constrained for readability but wider than mobile */}
             <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
                 {currentView !== 'add' && (
@@ -941,7 +941,7 @@ const App: React.FC = () => {
                     />
                 )}
             </div>
-            <div className="md:hidden h-28 pointer-events-none" aria-hidden="true" />
+            <div className="md:hidden h-40 pointer-events-none" aria-hidden="true" />
         </div>
 
         {/* Mobile Bottom Navigation (Hidden on Add screen & Desktop) */}
