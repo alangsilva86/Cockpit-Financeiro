@@ -941,6 +941,7 @@ const App: React.FC = () => {
                     />
                 )}
             </div>
+            <div className="md:hidden h-28 pointer-events-none" aria-hidden="true" />
         </div>
 
         {/* Mobile Bottom Navigation (Hidden on Add screen & Desktop) */}
