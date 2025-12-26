@@ -11,7 +11,6 @@ import { IconButton } from './components/ui/IconButton';
 import { AppState, Card, InstallmentPlan, Transaction, TransactionDraft, View } from './types';
 import { INITIAL_CATEGORIES } from './services/categories';
 import { syncAppState } from './services/syncService';
-import { TrustBar } from './components/ui/TrustBar';
 import { BottomSheetModal } from './components/ui/BottomSheetModal';
 import { SetupProgressCard } from './components/ui/SetupProgressCard';
 import { ToastAction } from './components/ui/ToastAction';
@@ -361,6 +360,13 @@ const App: React.FC = () => {
     () => state.transactions.filter((t) => t.needsSync && !t.deleted).length,
     [state.transactions]
   );
+  const headerSpendRatio = useMemo(() => {
+    const spent = state.transactions
+      .filter((t) => !t.deleted && t.kind !== 'income')
+      .reduce((acc, tx) => acc + (tx.amount || 0), 0);
+    if (state.monthlyIncome <= 0) return 0;
+    return Math.min(100, Math.round((spent / state.monthlyIncome) * 100));
+  }, [state.transactions, state.monthlyIncome]);
 
   const hasCard = useMemo(() => state.cards.some((c) => !c.deleted), [state.cards]);
   const hasTransaction = useMemo(() => state.transactions.some((t) => !t.deleted), [state.transactions]);
@@ -800,49 +806,51 @@ const App: React.FC = () => {
 
       {/* === MAIN CONTENT WRAPPER === */}
       <main className="flex-1 relative flex flex-col h-screen overflow-hidden bg-black md:bg-zinc-950/50">
-        {currentView !== 'add' && (
-          <TrustBar
-            isOnline={isOnline}
-            isSyncing={isSyncing}
-            lastSyncAt={lastSyncAt}
-            pendingCount={pendingCount}
-            syncError={syncError}
-            canInstall={!!installPrompt}
-            onInstall={handleInstallClick}
-            onSyncNow={() => runSync(true)}
-            onOpenDetails={() => setShowTrustDetails(true)}
-          />
-        )}
-
-        {/* Mobile Header (Hidden on Desktop) */}
-        {currentView !== 'add' && (
-          <header className="md:hidden px-6 pt-6 pb-2 flex justify-between items-center bg-zinc-950/80 backdrop-blur sticky top-0 z-10 flex-shrink-0">
-            <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
-                Cockpit 2026
-              </h1>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                {currentView === 'reports' ? 'Inteligência' : 'Meu Mês'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <IconButton
-                aria-label="Ajuda e setup"
-                icon={<Icons.Help size={16} />}
-                onClick={handleOpenSetup}
-                className="border border-zinc-800 bg-zinc-900/60 text-zinc-400"
-              />
-              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400">
-                AL
-              </div>
-            </div>
-          </header>
-        )}
 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto pb-24 md:pb-0 scroll-smooth min-h-0">
             {/* Desktop Center Container - constrained for readability but wider than mobile */}
             <div className="md:max-w-2xl md:mx-auto md:my-6 md:bg-zinc-950 md:min-h-[90vh] md:rounded-2xl md:border md:border-zinc-900/50 md:shadow-2xl">
+                {currentView !== 'add' && (
+                  <section className="border-b border-zinc-900/60 bg-zinc-950/60 px-6 pt-6 pb-4 md:px-10">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.5em] text-zinc-500">MEU MÊS</p>
+                        <h1 className="text-3xl font-bold text-emerald-400">Cockpit 2026</h1>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-[10px] font-semibold ${
+                            isOnline ? 'border-emerald-500/60 text-emerald-300' : 'border-amber-500/60 text-amber-200'
+                          }`}
+                        >
+                          {isOnline ? 'Online' : 'Offline'}
+                        </span>
+                        <button
+                          onClick={() => setShowTrustDetails(true)}
+                          className="rounded-full border border-zinc-800 px-4 py-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-300 transition hover:border-emerald-400 hover:text-white"
+                        >
+                          Detalhes
+                        </button>
+                        <IconButton
+                          aria-label="Ajuda e setup"
+                          icon={<Icons.Help size={16} />}
+                          onClick={handleOpenSetup}
+                          className="h-10 w-10 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 shadow-none"
+                        />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-xs font-bold text-zinc-300 uppercase">
+                          AL
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 h-1 rounded-full bg-zinc-900">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
+                        style={{ width: `${Math.max(16, headerSpendRatio)}%` }}
+                      />
+                    </div>
+                  </section>
+                )}
                 {showSetupCard && currentView !== 'add' && (
                   <div className="p-4">
                     <SetupProgressCard

@@ -23,6 +23,36 @@ interface ReportsProps {
 
 type TimeTab = 'past' | 'present' | 'future';
 
+const phaseDetails: Array<{
+  key: TimeTab;
+  title: string;
+  description: string;
+  nextStage: string;
+  accent: string;
+}> = [
+  {
+    key: 'past',
+    title: 'Passado',
+    description: 'Reveja o histórico para confirmar o que foi concluído e onde a categoria ficou fora da curva.',
+    nextStage: 'Preparar o presente com clareza',
+    accent: 'text-emerald-400',
+  },
+  {
+    key: 'present',
+    title: 'Presente',
+    description: 'Mantenha o fluxo atual equilibrado e priorize o que impacta o orçamento.',
+    nextStage: 'Planejar compromissos futuros e proteger a poupança',
+    accent: 'text-sky-400',
+  },
+  {
+    key: 'future',
+    title: 'Futuro',
+    description: 'Projete compromissos, alertas e metas do próximo ciclo.',
+    nextStage: 'Revisar aprendizados e iniciar o próximo giro',
+    accent: 'text-rose-400',
+  },
+];
+
 export const Reports: React.FC<ReportsProps> = ({
   state,
   onGenerateNextMonth,
@@ -41,6 +71,10 @@ export const Reports: React.FC<ReportsProps> = ({
   
   // State for expandable details
   const [showLifeDetails, setShowLifeDetails] = useState(false);
+
+  const currentPhaseIndex = phaseDetails.findIndex((phase) => phase.key === activeTab);
+  const safePhaseIndex = currentPhaseIndex >= 0 ? currentPhaseIndex : 1;
+  const currentPhase = phaseDetails[safePhaseIndex];
 
   // Helper: Get target date based on tab and offset
   const targetDate = useMemo(() => {
@@ -329,6 +363,43 @@ export const Reports: React.FC<ReportsProps> = ({
 
       {/* 2. Content Areas */}
       <div className="p-4 space-y-6 overflow-y-auto">
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/60 p-4 backdrop-blur-sm shadow-[0_15px_35px_rgba(2,6,23,0.65)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Percurso guiado</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-white">{currentPhase.title}</span>
+                <span className="text-[11px] uppercase tracking-[0.35em] text-zinc-500">
+                  Fase {safePhaseIndex + 1}/{phaseDetails.length}
+                </span>
+              </div>
+              <p className="text-sm text-zinc-300">{currentPhase.description}</p>
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.25em] ${currentPhase.accent}`}>
+                Próximo passo: {currentPhase.nextStage}
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.45em] text-zinc-500">Fluxo contínuo</span>
+          </div>
+          <div className="grid gap-4 pt-4 sm:grid-cols-3">
+            {phaseDetails.map((phase) => {
+              const isActive = phase.key === currentPhase.key;
+              return (
+                <div
+                  key={phase.key}
+                  className={`rounded-2xl border px-4 py-4 transition ${
+                    isActive
+                      ? 'border-emerald-400/70 bg-white/5 shadow-[0_10px_20px_rgba(15,23,42,0.45)]'
+                      : 'border-zinc-800 bg-zinc-950/30'
+                  }`}
+                >
+                  <p className={`text-[10px] uppercase tracking-[0.3em] ${phase.accent}`}>{phase.title}</p>
+                  <p className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-zinc-200'}`}>{phase.description}</p>
+                  <p className="text-[10px] text-zinc-500">Próximo: {phase.nextStage}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         {/* === RESUMO EXECUTIVO === */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard
@@ -349,26 +420,32 @@ export const Reports: React.FC<ReportsProps> = ({
         </div>
 
         {/* === FILTER CHIPS === */}
-        <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {(['All', 'alan', 'kellen', 'casa'] as const).map((p) => (
-            <Chip
-              key={p}
-              label={p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
-              selected={personFilter === p}
-              onClick={() => setPersonFilter(p)}
-            />
-          ))}
-          <div className="flex items-center gap-2">
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 px-4 py-4 space-y-4 backdrop-blur-sm">
+          <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {(['All', 'alan', 'kellen', 'casa'] as const).map((p) => (
+              <Chip
+                key={p}
+                label={p === 'All' ? 'Todos' : p === 'alan' ? 'Alan' : p === 'kellen' ? 'Kellen' : 'Casa'}
+                selected={personFilter === p}
+                onClick={() => setPersonFilter(p)}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <select
+              aria-label="Filtrar por forma de pagamento"
               value={paymentFilter}
               onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | 'All')}
               className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
             >
               {['All', 'credit', 'pix', 'debit', 'cash'].map((p) => (
-                <option key={p} value={p}>{p === 'All' ? 'Qualquer pagamento' : p}</option>
+                <option key={p} value={p}>
+                  {p === 'All' ? 'Qualquer pagamento' : p}
+                </option>
               ))}
             </select>
             <select
+              aria-label="Filtrar por status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'All' | 'paid' | 'pending')}
               className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-xl px-4 py-2"
@@ -378,8 +455,8 @@ export const Reports: React.FC<ReportsProps> = ({
               <option value="pending">Pendentes</option>
             </select>
           </div>
+          <FilterChips chips={filterChips} onClear={clearFilters} />
         </div>
-        <FilterChips chips={filterChips} onClear={clearFilters} />
 
         {/* === SUMMARY CARDS === */}
         <div className="grid grid-cols-2 gap-4">
