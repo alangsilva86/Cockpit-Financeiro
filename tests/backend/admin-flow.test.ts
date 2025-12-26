@@ -4,9 +4,9 @@ import syncHandler from '../../api/sync';
 import listHandler from '../../api/admin/transactions';
 import transactionHandler from '../../api/admin/transactions/[id]';
 import restoreHandler from '../../api/admin/transactions/[id]/restore';
-import { computeHmac } from '../../api/lib/auth';
-import { workspaceToUuid } from '../../api/lib/ids';
-import { requestSupabase } from '../../api/lib/supabase';
+import { computeHmac } from '../../server/auth.js';
+import { workspaceToUuid } from '../../server/ids.js';
+import { requestSupabase } from '../../server/supabase.js';
 
 const hasSupabase =
   Boolean(process.env.SUPABASE_URL) &&

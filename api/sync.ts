@@ -1,10 +1,10 @@
 import type { AppState, Card, InstallmentPlan, Transaction } from '../types';
-import { getActorFromRequest } from './lib/actors';
-import { insertAuditEvent } from './lib/audit';
-import { authorizeSync } from './lib/auth';
-import { isUuid } from './lib/ids';
-import { mapStateToRows } from './lib/sync/transform';
-import { isSupabaseConfigured, requestSupabase } from './lib/supabase';
+import { getActorFromRequest } from '../server/actors.js';
+import { insertAuditEvent } from '../server/audit.js';
+import { authorizeSync } from '../server/auth.js';
+import { isUuid } from '../server/ids.js';
+import { mapStateToRows } from '../server/sync/transform.js';
+import { isSupabaseConfigured, requestSupabase } from '../server/supabase.js';
 
 const nowIso = () => new Date().toISOString();
 const SUPABASE_TABLE = process.env.SUPABASE_SYNC_TABLE || 'app_states';

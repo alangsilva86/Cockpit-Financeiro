@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState } from '../../types';
-import { toDateOnly, toMonthStart } from '../../api/lib/dates';
-import { mapStateToRows } from '../../api/lib/sync/transform';
+import { toDateOnly, toMonthStart } from '../../server/dates.js';
+import { mapStateToRows } from '../../server/sync/transform.js';
 
 describe('date normalization', () => {
   it('normalizes month strings and dates', () => {

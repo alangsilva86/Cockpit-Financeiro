@@ -1,7 +1,5 @@
 import crypto from 'crypto';
 
-type AuthResult = { ok: true } | { ok: false; reason: string };
-
 const readHeader = (req: any, key: string) => {
   if (!req?.headers) return undefined;
   const direct = req.headers[key];
@@ -20,7 +18,7 @@ const safeEqual = (left: string, right: string) => {
   return crypto.timingSafeEqual(leftBuf, rightBuf);
 };
 
-export type AuthResult = { ok: true } | { ok: false; reason: string };
+export type AuthResult = { ok: true; reason?: string } | { ok: false; reason: string };
 
 export const computeHmac = (secret: string, message: string) =>
   crypto.createHmac('sha256', secret).update(message).digest('hex');

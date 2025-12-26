@@ -1,4 +1,4 @@
-import { requestSupabase } from './supabase';
+import { requestSupabase } from './supabase.js';
 
 export type AuditEventPayload = {
   workspace_id: string;

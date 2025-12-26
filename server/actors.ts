@@ -1,4 +1,4 @@
-import { isUuid } from './ids';
+import { isUuid } from './ids.js';
 
 export const getActorFromRequest = (req: any) => {
   const userHeader =

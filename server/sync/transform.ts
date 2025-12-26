@@ -1,6 +1,6 @@
-import type { AppState, Card, InstallmentPlan, Transaction } from '../../../types';
-import { toDateOnly, toMonthStart } from '../dates';
-import { entityToUuid, workspaceToUuid } from '../ids';
+import type { AppState, Card, InstallmentPlan, Transaction } from '../../types.js';
+import { toDateOnly, toMonthStart } from '../dates.js';
+import { entityToUuid, workspaceToUuid } from '../ids.js';
 
 export type CardRow = {
   id: string;
