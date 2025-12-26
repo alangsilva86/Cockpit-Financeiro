@@ -420,7 +420,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
 
         <div className="space-y-4">
           <h3 className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest px-2">Linha do Tempo</h3>
-          <div className="relative border-l border-zinc-800 ml-2 space-y-8">
+          <div className="relative border-l border-zinc-800 ml-2 space-y-8" style={{ paddingBottom: 75 }}>
             {filteredMonthData.map((item) => {
               const { day, weekday } = formatDate(item.date);
               const isPaid = item.status === 'paid';
@@ -526,7 +526,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ state, onToggleStatus, onQ
             })}
 
             {filteredMonthData.length === 0 && (
-              <div className="pl-6">
+              <div className="pl-6" style={{ paddingBottom: 75 }}>
                 <EmptyState title="Nenhum lançamento encontrado" description="Ajuste filtros ou gere um roteiro no Planejamento." />
               </div>
             )}
