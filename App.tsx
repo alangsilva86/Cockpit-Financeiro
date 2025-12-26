@@ -403,6 +403,14 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const handleApplyUpdate = () => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.controller?.postMessage('SKIP_WAITING');
+    }
+    setSwUpdateReady(false);
+    window.location.reload();
+  };
+
   useEffect(() => {
     const online = () => {
       setIsOnline(true);
@@ -1023,7 +1031,7 @@ const App: React.FC = () => {
         <div className="fixed bottom-20 right-4 left-4 md:left-auto md:w-72 p-3 rounded-xl shadow-2xl border text-sm bg-blue-500/10 border-blue-500/40 text-blue-100 flex justify-between items-center">
           <span>Nova versão disponível</span>
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleApplyUpdate}
             className="text-xs font-bold text-white bg-blue-600 px-3 py-1 rounded-lg hover:bg-blue-500"
           >
             Atualizar

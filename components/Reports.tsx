@@ -150,7 +150,7 @@ export const Reports: React.FC<ReportsProps> = ({
     });
     return Object.values(map)
       .sort((a, b) => a.order - b.order)
-      .map(({ order, ...rest }) => rest);
+      .map(({ order: _order, ...rest }) => rest);
   }, [state.transactions]);
 
   // Group by Type for List
@@ -421,7 +421,7 @@ export const Reports: React.FC<ReportsProps> = ({
           <div className="rounded-[32px] border border-zinc-800 bg-gradient-to-b from-zinc-950/80 to-zinc-950/40 p-4 flex flex-col gap-4 min-h-[190px]">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Linha do tempo de gastos</span>
-              <div className="flex gap-3 text-[11px]">
+              <div className="flex gap-2 text-[11px]">
                 <span className="text-blue-400 font-semibold">Vida</span>
                 <span className="text-rose-400 font-semibold">Juros</span>
               </div>
