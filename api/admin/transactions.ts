@@ -106,14 +106,16 @@ export default async function handler(req: any, res: any) {
   if (resolvedCursor) params.set('offset', String(resolvedCursor));
 
   try {
-    const response = await requestSupabase('transactions', { query: params.toString() });
-    const rows = (await response.json()) as Array<Record<string, any>>;
-    const data = rows.map((row) => ({
+    const rows = (await requestSupabase('transactions', { query: params.toString() })) as
+      | Array<Record<string, any>>
+      | null;
+    const normalizedRows = rows || [];
+    const data = normalizedRows.map((row) => ({
       ...row,
       deleted: Boolean(row.deleted_at),
       installment: Boolean(row.installment_plan_id || row.installment_count),
     }));
-    const nextCursor = rows.length === resolvedLimit ? resolvedCursor + resolvedLimit : null;
+    const nextCursor = normalizedRows.length === resolvedLimit ? resolvedCursor + resolvedLimit : null;
     return res.status(200).json({ data, nextCursor });
   } catch (error) {
     console.error('admin transactions error', error);

@@ -54,8 +54,7 @@ const fetchStoredState = async (workspaceId: string) => {
   const query = `workspace_id=eq.${encodeURIComponent(
     workspaceId
   )}&select=workspace_id,state,updated_at,schema_version,revision`;
-  const res = await requestSupabase(SUPABASE_TABLE, { query });
-  const rows = (await res.json()) as StoredRow[];
+  const rows = (await requestSupabase(SUPABASE_TABLE, { query })) as StoredRow[] | null;
   const row = rows?.[0];
   if (!row?.state) return null;
   const updatedAt = row.state.updatedAt || row.updated_at || nowIso();

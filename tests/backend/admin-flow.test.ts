@@ -113,10 +113,9 @@ describe('admin flow (requires Supabase)', () => {
     expect(restoreRes.statusCode).toBe(200);
     expect(restoreRes.body?.transaction?.deleted_at).toBeNull();
 
-    const auditRes = await requestSupabase('audit_events', {
+    const auditRows = (await requestSupabase('audit_events', {
       query: `workspace_id=eq.${workspaceUuid}&entity_type=eq.transaction&action=eq.update&order=created_at.desc&limit=1`,
-    });
-    const auditRows = (await auditRes.json()) as Array<Record<string, any>>;
-    expect(auditRows.length).toBeGreaterThan(0);
+    })) as Array<Record<string, any>> | null;
+    expect((auditRows || []).length).toBeGreaterThan(0);
   });
 });

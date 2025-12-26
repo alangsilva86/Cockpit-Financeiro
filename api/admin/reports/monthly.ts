@@ -34,18 +34,17 @@ export default async function handler(req: any, res: any) {
   const workspaceUuid = workspaceToUuid(String(workspaceId));
 
   try {
-    const summaryRes = await requestSupabase('v_monthly_summary', {
+    const summaryRows = (await requestSupabase('v_monthly_summary', {
       query: `workspace_id=eq.${workspaceUuid}&competence_month=eq.${monthStart}&select=workspace_id,competence_month,income_total,spend_total,interest_total,net_total`,
-    });
-    const summaryRows = (await summaryRes.json()) as Array<Record<string, any>>;
+    })) as Array<Record<string, any>> | null;
     const summary = summaryRows[0] || null;
 
-    const breakdownRes = await requestSupabase('v_category_breakdown', {
+    const categories = (await requestSupabase('v_category_breakdown', {
       query: `workspace_id=eq.${workspaceUuid}&competence_month=eq.${monthStart}&select=category_id,category_name,total&order=total.desc`,
-    });
-    const categories = (await breakdownRes.json()) as Array<Record<string, any>>;
+    })) as Array<Record<string, any>> | null;
+    const normalizedCategories = categories || [];
 
-    return res.status(200).json({ summary, categories });
+    return res.status(200).json({ summary, categories: normalizedCategories });
   } catch (error) {
     console.error('admin monthly report error', error);
     const message = error instanceof Error ? error.message : 'request failed';

@@ -9,9 +9,8 @@ const resolveTransactionId = (workspaceUuid: string, id: string) =>
 
 const fetchTransaction = async (workspaceUuid: string, transactionId: string) => {
   const query = `id=eq.${transactionId}&workspace_id=eq.${workspaceUuid}&select=*`;
-  const response = await requestSupabase('transactions', { query });
-  const rows = (await response.json()) as Array<Record<string, any>>;
-  return rows[0] || null;
+  const rows = (await requestSupabase('transactions', { query })) as Array<Record<string, any>> | null;
+  return rows?.[0] || null;
 };
 
 export default async function handler(req: any, res: any) {
@@ -49,7 +48,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'actor_device_id is required' });
     }
 
-    const response = await requestSupabase('transactions', {
+    const rows = (await requestSupabase('transactions', {
       method: 'PATCH',
       query: `id=eq.${transactionId}&workspace_id=eq.${workspaceUuid}`,
       headers: { Prefer: 'return=representation' },
@@ -58,8 +57,7 @@ export default async function handler(req: any, res: any) {
         updated_at: now,
       },
     });
-    const rows = (await response.json()) as Array<Record<string, any>>;
-    const after = rows[0] || null;
+    const after = rows?.[0] || null;
 
     await insertAuditEvent({
       workspace_id: workspaceUuid,

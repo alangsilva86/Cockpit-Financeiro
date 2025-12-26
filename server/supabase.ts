@@ -1,6 +1,11 @@
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 const SUPABASE_SCHEMA = process.env.SUPABASE_SYNC_SCHEMA || 'public';
+const REST_BASE = (() => {
+  if (!SUPABASE_URL) return '';
+  const normalized = SUPABASE_URL.replace(/\/rest\/v1\/?$/, '');
+  return `${normalized}/rest/v1`;
+})();
 
 export const isSupabaseConfigured = () => Boolean(SUPABASE_URL && SUPABASE_KEY);
 
@@ -24,11 +29,6 @@ export const supabaseHeaders = () => {
   };
 };
 
-export const buildSupabaseUrl = (resource: string, query = '') => {
-  const normalizedQuery = query ? (query.startsWith('?') ? query : `?${query}`) : '';
-  return `${SUPABASE_URL}/rest/v1/${resource}${normalizedQuery}`;
-};
-
 export const withTimeout = async <T>(promise: Promise<T>, ms = 8000): Promise<T> => {
   let timer: NodeJS.Timeout;
   const timeout = new Promise<never>((_, reject) => {
@@ -50,7 +50,10 @@ export const requestSupabase = async (
   } = {}
 ) => {
   assertSupabaseConfigured();
-  const url = buildSupabaseUrl(resource, options.query || '');
+  if (!REST_BASE) throw new Error('Supabase URL is missing');
+  const normalizedQuery = options.query ? (options.query.startsWith('?') ? options.query : `?${options.query}`) : '';
+  const path = resource.startsWith('/') ? resource : `/${resource}`;
+  const url = `${REST_BASE}${path}${normalizedQuery}`;
   const res = await withTimeout(
     fetch(url, {
       method: options.method || 'GET',
@@ -63,8 +66,16 @@ export const requestSupabase = async (
     options.timeoutMs ?? 8000
   );
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`supabase ${res.status}: ${text || 'request failed'}`);
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `supabase ${res.status} url=${url} body=${text ? text.slice(0, 300) : 'request failed'}`
+    );
   }
-  return res;
+  const text = await res.text().catch(() => '');
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 };
