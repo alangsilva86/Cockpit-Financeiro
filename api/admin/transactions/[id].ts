@@ -1,9 +1,9 @@
-import { getActorFromRequest } from '../../../server/actors';
-import { insertAuditEvent } from '../../../server/audit';
-import { authorizeAdmin } from '../../../server/auth';
-import { toDateOnly, toMonthStart } from '../../../server/dates';
-import { entityToUuid, isUuid, workspaceToUuid } from '../../../server/ids';
-import { isSupabaseConfigured, requestSupabase } from '../../../server/supabase';
+import { getActorFromRequest } from '../../../lib/actors';
+import { insertAuditEvent } from '../../../lib/audit';
+import { authorizeAdmin } from '../../../lib/auth';
+import { toDateOnly, toMonthStart } from '../../../lib/dates';
+import { entityToUuid, isUuid, workspaceToUuid } from '../../../lib/ids';
+import { isSupabaseConfigured, requestSupabase } from '../../../lib/supabase';
 
 const resolveTransactionId = (workspaceUuid: string, id: string) =>
   isUuid(id) ? id : entityToUuid(workspaceUuid, 'transaction', id);

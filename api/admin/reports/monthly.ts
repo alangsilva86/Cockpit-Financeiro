@@ -1,8 +1,8 @@
-import { getActorFromRequest } from '../../../server/actors';
-import { authorizeAdmin } from '../../../server/auth';
-import { toMonthStart } from '../../../server/dates';
-import { workspaceToUuid } from '../../../server/ids';
-import { isSupabaseConfigured, requestSupabase } from '../../../server/supabase';
+import { getActorFromRequest } from '../../../lib/actors';
+import { authorizeAdmin } from '../../../lib/auth';
+import { toMonthStart } from '../../../lib/dates';
+import { workspaceToUuid } from '../../../lib/ids';
+import { isSupabaseConfigured, requestSupabase } from '../../../lib/supabase';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });

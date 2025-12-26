@@ -1,8 +1,8 @@
-import { getActorFromRequest } from '../../server/actors';
-import { authorizeAdmin } from '../../server/auth';
-import { toMonthStart } from '../../server/dates';
-import { entityToUuid, isUuid, workspaceToUuid } from '../../server/ids';
-import { isSupabaseConfigured, requestSupabase } from '../../server/supabase';
+import { getActorFromRequest } from '../lib/actors';
+import { authorizeAdmin } from '../lib/auth';
+import { toMonthStart } from '../lib/dates';
+import { entityToUuid, isUuid, workspaceToUuid } from '../lib/ids';
+import { isSupabaseConfigured, requestSupabase } from '../lib/supabase';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
