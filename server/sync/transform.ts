@@ -10,7 +10,7 @@ export type CardRow = {
   limit_amount: number | null;
   closing_day: number | null;
   due_day: number | null;
-  archived_at?: string;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -20,7 +20,7 @@ export type CategoryRow = {
   workspace_id: string;
   name: string;
   kind: string | null;
-  archived_at?: string;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -33,7 +33,7 @@ export type InstallmentPlanRow = {
   total_amount: number;
   installment_count: number;
   start_competence_month: string;
-  canceled_at?: string;
+  canceled_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,7 +56,7 @@ export type TransactionRow = {
   installment_count: number | null;
   created_at: string;
   updated_at: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 };
 
 export type SyncRows = {
@@ -89,6 +89,7 @@ const buildPlanFromInstallment = (
     total_amount: totalAmount,
     installment_count: total,
     start_competence_month: ensureMonthStart(tx.installment?.startDate || tx.competenceMonth || tx.date),
+    canceled_at: null,
     created_at: tx.createdAt || nowIso,
     updated_at: tx.updatedAt || nowIso,
   };
@@ -96,6 +97,7 @@ const buildPlanFromInstallment = (
 
 const normalizeCardRows = (cards: Card[], referencedCardIds: Set<string>, workspaceUuid: string, nowIso: string) => {
   const rows: CardRow[] = cards.map((card) => {
+    const archivedAt = card.deleted ? card.updatedAt || nowIso : null;
     const row: CardRow = {
       id: entityToUuid(workspaceUuid, 'card', card.id),
       workspace_id: workspaceUuid,
@@ -104,12 +106,10 @@ const normalizeCardRows = (cards: Card[], referencedCardIds: Set<string>, worksp
       limit_amount: card.limit ?? null,
       closing_day: card.closingDay ?? null,
       due_day: card.dueDay ?? null,
+      archived_at: archivedAt,
       created_at: card.createdAt || nowIso,
       updated_at: card.updatedAt || nowIso,
     };
-    if (card.deleted) {
-      row.archived_at = card.updatedAt || nowIso;
-    }
     return row;
   });
 
@@ -123,6 +123,7 @@ const normalizeCardRows = (cards: Card[], referencedCardIds: Set<string>, worksp
       limit_amount: null,
       closing_day: null,
       due_day: null,
+      archived_at: null,
       created_at: nowIso,
       updated_at: nowIso,
     });
@@ -160,6 +161,7 @@ export const mapStateToRows = (state: AppState, workspaceId: string, nowIso = ne
     workspace_id: workspaceUuid,
     name,
     kind: null,
+    archived_at: null,
     created_at: nowIso,
     updated_at: nowIso,
   }));
@@ -174,6 +176,7 @@ export const mapStateToRows = (state: AppState, workspaceId: string, nowIso = ne
       total_amount: plan.totalAmount,
       installment_count: plan.totalInstallments,
       start_competence_month: ensureMonthStart(plan.firstInstallmentDate || plan.purchaseDate || plan.createdAt),
+      canceled_at: null,
       created_at: plan.createdAt || nowIso,
       updated_at: plan.updatedAt || nowIso,
     };
@@ -215,6 +218,7 @@ export const mapStateToRows = (state: AppState, workspaceId: string, nowIso = ne
         : null,
       installment_index: tx.installment?.number ?? null,
       installment_count: installmentCount,
+      deleted_at: null,
       created_at: tx.createdAt || nowIso,
       updated_at: tx.updatedAt || nowIso,
     };
